@@ -2,23 +2,52 @@ class_name MatchController
 extends Node3D
 
 const BUILDER_SCENE := preload("res://scenes/units/builder.tscn")
+const BUILDING_DATA_PATHS := {
+	"power_plant": "res://data/buildings/power_plant.json",
+	"resource_center": "res://data/buildings/resource_center.json",
+	"barracks": "res://data/buildings/barracks.json",
+	"war_factory": "res://data/buildings/war_factory.json",
+	"defense_turret": "res://data/buildings/defense_turret.json"
+}
 
 @onready var prototype_map: PrototypeMap = $PrototypeMap
 @onready var camera_controller: RtsCamera = $CameraRig
 @onready var units_root: Node3D = $Units
+@onready var buildings_root: Node3D = $Buildings
 @onready var hud: MatchHud = $MatchHUD
 
 var selected_units: Array[MobileUnit] = []
+var money := 10000
+var power_current := 0
+var power_max := 0
+var unit_count := 1
+var unit_cap := 60
+
+var building_data: Dictionary = {}
+var active_builds: Array[Dictionary] = []
+
 var _primary_touch_start := Vector2.ZERO
 var _primary_touch_dragged := false
 var _last_mouse_position := Vector2.ZERO
 var _command_marker: MeshInstance3D
+var _placement_preview: Building
+var _placement_building_id := ""
+var _placement_position := Vector3.ZERO
+var _placement_valid := false
 
 func _ready() -> void:
+	_load_building_data()
+	hud.build_requested.connect(Callable(self, "_on_build_requested"))
+	hud.placement_confirmed.connect(Callable(self, "_on_placement_confirmed"))
+	hud.placement_cancelled.connect(Callable(self, "_cancel_placement"))
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
 	_spawn_builder()
 	_create_command_marker()
+	_update_match_stats()
 	_update_hud_selection()
+
+func _physics_process(delta: float) -> void:
+	_update_active_builds(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
@@ -26,8 +55,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag and event.index == 0:
 		if event.position.distance_to(_primary_touch_start) > 18.0:
 			_primary_touch_dragged = true
+		if _is_placing_building():
+			_update_placement_from_screen(event.position)
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
 		_last_mouse_position = event.position
+		if _is_placing_building():
+			_update_placement_from_screen(event.position)
 	elif event is InputEventMouseButton and event.pressed:
 		_handle_mouse_button(event)
 
@@ -38,6 +72,8 @@ func _handle_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed and event.index == 0:
 		_primary_touch_start = event.position
 		_primary_touch_dragged = false
+		if _is_placing_building():
+			_update_placement_from_screen(event.position)
 	elif not event.pressed and event.index == 0 and not _primary_touch_dragged:
 		_process_primary_tap(event.position)
 
@@ -55,6 +91,11 @@ func _process_primary_tap(screen_position: Vector2) -> void:
 	if hit.is_empty():
 		return
 
+	if _is_placing_building():
+		if _is_ground_hit(hit):
+			_update_placement_from_screen(screen_position)
+		return
+
 	var selectable := _selectable_from_collider(hit.get("collider"))
 	if selectable != null and selectable.team_id == 1:
 		_select_single(selectable)
@@ -66,6 +107,10 @@ func _process_primary_tap(screen_position: Vector2) -> void:
 		_clear_selection()
 
 func _issue_move_command(screen_position: Vector2) -> void:
+	if _is_placing_building():
+		_cancel_placement()
+		return
+
 	if selected_units.is_empty():
 		return
 
@@ -176,7 +221,199 @@ func _hide_command_marker() -> void:
 func _update_hud_selection() -> void:
 	if selected_units.is_empty():
 		hud.update_selection(0, "None")
+		hud.show_builder_controls(false)
 	elif selected_units.size() == 1 and is_instance_valid(selected_units[0]):
 		hud.update_selection(1, selected_units[0].display_name)
+		hud.show_builder_controls(selected_units[0] is BuilderUnit and not _is_placing_building())
 	else:
 		hud.update_selection(selected_units.size(), "Units")
+		hud.show_builder_controls(false)
+
+func _load_building_data() -> void:
+	for building_id in BUILDING_DATA_PATHS.keys():
+		var path: String = BUILDING_DATA_PATHS[building_id]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			push_warning("Missing building data: %s" % path)
+			continue
+		var parsed = JSON.parse_string(file.get_as_text())
+		if parsed is Dictionary:
+			building_data[building_id] = parsed
+		else:
+			push_warning("Invalid building data: %s" % path)
+
+func _on_build_requested(building_id: String) -> void:
+	if not building_data.has(building_id):
+		hud.set_hint("Building data is missing: %s" % building_id)
+		return
+	if _get_selected_builder() == null:
+		hud.set_hint("Select the Builder before placing a building.")
+		return
+
+	var data: Dictionary = building_data[building_id]
+	var price := int(data.get("price", 0))
+	if money < price:
+		hud.set_hint("Not enough money for %s." % str(data.get("name", building_id)))
+		return
+
+	_start_placement(building_id)
+
+func _start_placement(building_id: String) -> void:
+	_cancel_placement()
+	_placement_building_id = building_id
+	var data: Dictionary = building_data[building_id]
+	_placement_preview = Building.new()
+	_placement_preview.configure(data, 1)
+	_placement_preview.name = "Preview%s" % str(data.get("name", building_id)).replace(" ", "")
+	buildings_root.add_child(_placement_preview)
+	_update_placement_from_screen(_last_mouse_position)
+
+func _update_placement_from_screen(screen_position: Vector2) -> void:
+	if not _is_placing_building():
+		return
+	var hit := _raycast_from_screen(screen_position)
+	if hit.is_empty() or not _is_ground_hit(hit):
+		_placement_valid = false
+		_placement_preview.set_preview_mode(false)
+		hud.show_placement_controls(_placement_preview.display_name, false)
+		return
+
+	_placement_position = hit.position
+	_placement_position.y = 0.0
+	_placement_preview.global_position = _placement_position
+	_placement_valid = _can_place_building(_placement_preview, _placement_position)
+	_placement_preview.set_preview_mode(_placement_valid)
+	hud.show_placement_controls(_placement_preview.display_name, _placement_valid)
+
+func _on_placement_confirmed() -> void:
+	if not _is_placing_building():
+		return
+	if not _placement_valid:
+		hud.set_hint("Cannot build there.")
+		return
+
+	var builder := _get_selected_builder()
+	if builder == null:
+		_cancel_placement()
+		return
+
+	var data: Dictionary = building_data[_placement_building_id]
+	var price := int(data.get("price", 0))
+	if money < price:
+		hud.set_hint("Not enough money for %s." % _placement_preview.display_name)
+		return
+
+	money -= price
+	_update_match_stats()
+
+	var building := _placement_preview
+	_placement_preview = null
+	_placement_building_id = ""
+	building.name = "%sConstruction" % building.display_name.replace(" ", "")
+	building.set_under_construction()
+
+	var build_spot := _nearest_builder_position(building.global_position, building.footprint)
+	builder.move_to(build_spot)
+	active_builds.append({
+		"builder": builder,
+		"building": building,
+		"build_spot": build_spot,
+		"elapsed": 0.0,
+		"started": false
+	})
+
+	hud.show_builder_controls(true)
+	hud.set_hint("Builder moving to construct %s." % building.display_name)
+
+func _cancel_placement() -> void:
+	if is_instance_valid(_placement_preview):
+		_placement_preview.queue_free()
+	_placement_preview = null
+	_placement_building_id = ""
+	_placement_valid = false
+	if _get_selected_builder() != null:
+		hud.show_builder_controls(true)
+	else:
+		hud.show_builder_controls(false)
+
+func _update_active_builds(delta: float) -> void:
+	for index in range(active_builds.size() - 1, -1, -1):
+		var order := active_builds[index]
+		var builder := order.get("builder") as BuilderUnit
+		var building := order.get("building") as Building
+		if not is_instance_valid(builder) or not is_instance_valid(building):
+			active_builds.remove_at(index)
+			continue
+		var build_spot := order.get("build_spot", building.global_position) as Vector3
+
+		var started := bool(order.get("started", false))
+		if not started:
+			if builder.global_position.distance_to(build_spot) > 1.25:
+				continue
+			order["started"] = true
+			builder.stop()
+			hud.set_hint("Constructing %s." % building.display_name)
+
+		order["elapsed"] = float(order.get("elapsed", 0.0)) + delta
+		var progress := float(order["elapsed"]) / maxf(building.build_time, 0.1)
+		building.set_construction_progress(progress)
+
+		if progress >= 1.0:
+			building.finish_construction()
+			_apply_completed_building_stats(building)
+			active_builds.remove_at(index)
+			hud.set_hint("%s complete." % building.display_name)
+
+func _apply_completed_building_stats(building: Building) -> void:
+	power_max += building.power_provided
+	power_current += building.power_required
+	_update_match_stats()
+
+func _can_place_building(building: Building, at: Vector3) -> bool:
+	var half_map := prototype_map.get_half_extents()
+	var half_footprint := building.footprint * 0.5
+	if at.x - half_footprint.x < -half_map.x or at.x + half_footprint.x > half_map.x:
+		return false
+	if at.z - half_footprint.y < -half_map.y or at.z + half_footprint.y > half_map.y:
+		return false
+	if prototype_map.is_area_blocked(at, building.footprint):
+		return false
+
+	for existing in get_tree().get_nodes_in_group("buildings"):
+		var existing_building := existing as Building
+		if existing_building == null or existing_building == building or existing_building.is_preview:
+			continue
+		var min_distance := maxf(existing_building.footprint.length(), building.footprint.length()) * 0.38
+		if existing_building.global_position.distance_to(at) < min_distance:
+			return false
+	return true
+
+func _nearest_builder_position(center: Vector3, footprint: Vector2) -> Vector3:
+	var builder := _get_selected_builder()
+	var direction := Vector3(0.0, 0.0, 1.0)
+	if builder != null:
+		direction = builder.global_position - center
+		direction.y = 0.0
+		if direction.length_squared() < 0.01:
+			direction = Vector3(0.0, 0.0, 1.0)
+		direction = direction.normalized()
+	var distance := maxf(footprint.x, footprint.y) * 0.5 + 1.6
+	var target := center + direction * distance
+	var half_map := prototype_map.get_half_extents()
+	target.x = clampf(target.x, -half_map.x, half_map.x)
+	target.z = clampf(target.z, -half_map.y, half_map.y)
+	target.y = 0.45
+	return target
+
+func _get_selected_builder() -> BuilderUnit:
+	if selected_units.size() == 1 and is_instance_valid(selected_units[0]) and selected_units[0] is BuilderUnit:
+		return selected_units[0] as BuilderUnit
+	return null
+
+func _is_placing_building() -> bool:
+	return is_instance_valid(_placement_preview)
+
+func _update_match_stats() -> void:
+	hud.update_match_stats(money, power_current, power_max, unit_count, unit_cap)
+	for building_id in building_data.keys():
+		hud.set_build_button_enabled(building_id, money >= int(building_data[building_id].get("price", 0)))

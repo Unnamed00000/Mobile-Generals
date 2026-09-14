@@ -1,0 +1,12 @@
+{
+  "id": "power_plant",
+  "name": "Power Plant",
+  "category": "Economy",
+  "price": 800,
+  "hp": 1200,
+  "build_time": 5.0,
+  "footprint": [5.0, 5.0],
+  "power_provided": 150,
+  "power_required": 0
+}
+

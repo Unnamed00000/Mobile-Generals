@@ -1,0 +1,11 @@
+{
+  "id": "defense_turret",
+  "name": "Defense Turret",
+  "category": "Defense",
+  "price": 900,
+  "hp": 1000,
+  "build_time": 6.0,
+  "footprint": [4.0, 4.0],
+  "power_provided": 0,
+  "power_required": 35
+}

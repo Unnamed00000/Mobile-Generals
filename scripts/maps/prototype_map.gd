@@ -5,6 +5,7 @@ extends Node3D
 
 var player_start := Vector3(-42.0, 0.45, 24.0)
 var enemy_start := Vector3(42.0, 0.45, -24.0)
+var _blocked_areas: Array[Dictionary] = []
 
 func _ready() -> void:
 	_build_ground()
@@ -14,6 +15,14 @@ func _ready() -> void:
 
 func get_half_extents() -> Vector2:
 	return map_size * 0.5
+
+func is_area_blocked(center: Vector3, footprint: Vector2) -> bool:
+	for area in _blocked_areas:
+		var area_center: Vector3 = area["center"]
+		var area_size: Vector2 = area["size"]
+		if _rects_overlap(Vector2(center.x, center.z), footprint, Vector2(area_center.x, area_center.z), area_size):
+			return true
+	return false
 
 func _build_ground() -> void:
 	var mesh := PlaneMesh.new()
@@ -64,11 +73,13 @@ func _build_terrain_details() -> void:
 	]
 	for i in wrecks.size():
 		_add_flat_box("Wreck%02d" % i, wrecks[i], Vector3(7.0, 0.6, 3.0), Color(0.22, 0.24, 0.23), 23.0 + i * 19.0)
+		_blocked_areas.append({"center": wrecks[i], "size": Vector2(8.0, 4.0)})
 
 	var resource_marker := _make_cylinder("ResourceField", 5.5, 0.35, Color(0.72, 0.80, 0.88))
 	resource_marker.position = Vector3(-32.0, 0.18, -12.0)
 	resource_marker.add_to_group("resource_points")
 	add_child(resource_marker)
+	_blocked_areas.append({"center": resource_marker.position, "size": Vector2(12.0, 8.0)})
 
 	for i in 9:
 		var angle := float(i) * TAU / 9.0
@@ -89,6 +100,7 @@ func _add_obstacle(label: String, at: Vector3, size: Vector3, color: Color) -> v
 	mesh_instance.position = at
 	mesh_instance.rotation_degrees.y = randf_range(-25.0, 25.0)
 	add_child(mesh_instance)
+	_blocked_areas.append({"center": at, "size": Vector2(size.x + 1.0, size.z + 1.0)})
 
 	var body := StaticBody3D.new()
 	body.name = "%sCollision" % label
@@ -135,3 +147,8 @@ func _make_cylinder(label: String, radius: float, height: float, color: Color) -
 	mesh_instance.mesh = mesh
 	mesh_instance.material_override = material
 	return mesh_instance
+
+func _rects_overlap(a_center: Vector2, a_size: Vector2, b_center: Vector2, b_size: Vector2) -> bool:
+	var a_half := a_size * 0.5
+	var b_half := b_size * 0.5
+	return absf(a_center.x - b_center.x) <= a_half.x + b_half.x and absf(a_center.y - b_center.y) <= a_half.y + b_half.y

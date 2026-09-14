@@ -46,5 +46,7 @@ far = 300.0
 
 [node name="Units" type="Node3D" parent="."]
 
+[node name="Buildings" type="Node3D" parent="."]
+
 [node name="MatchHUD" type="CanvasLayer" parent="."]
 script = ExtResource("4_hud")

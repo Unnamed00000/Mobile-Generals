@@ -1,6 +1,10 @@
 class_name MatchHud
 extends CanvasLayer
 
+signal build_requested(building_id: String)
+signal placement_confirmed
+signal placement_cancelled
+
 var money := 10000
 var power_current := 0
 var power_max := 0
@@ -12,7 +16,11 @@ var selected_label := "None"
 var _top_bar: Label
 var _selection_label: Label
 var _hint_label: Label
+var _context_panel: HBoxContainer
+var _builder_panel: HBoxContainer
+var _placement_panel: HBoxContainer
 var _interactive_controls: Array[Control] = []
+var _building_buttons: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -38,6 +46,28 @@ func update_selection(count: int, label: String) -> void:
 			_selection_label.text = "Selected: %s" % label
 		else:
 			_selection_label.text = "Selected: %d units" % count
+
+func show_builder_controls(enabled: bool) -> void:
+	if is_instance_valid(_builder_panel):
+		_builder_panel.visible = enabled
+	if is_instance_valid(_placement_panel):
+		_placement_panel.visible = false
+	_set_default_hint()
+
+func show_placement_controls(building_name: String, valid: bool) -> void:
+	if is_instance_valid(_builder_panel):
+		_builder_panel.visible = false
+	if is_instance_valid(_placement_panel):
+		_placement_panel.visible = true
+	_set_hint("Placing %s: %s" % [building_name, "valid location" if valid else "blocked location"])
+
+func set_hint(message: String) -> void:
+	_set_hint(message)
+
+func set_build_button_enabled(building_id: String, enabled: bool) -> void:
+	if _building_buttons.has(building_id):
+		var button := _building_buttons[building_id] as Button
+		button.disabled = not enabled
 
 func is_screen_position_over_ui(screen_position: Vector2) -> bool:
 	for control in _interactive_controls:
@@ -99,6 +129,43 @@ func _build_ui() -> void:
 	_hint_label.add_theme_font_size_override("font_size", 22)
 	bottom_row.add_child(_hint_label)
 
+	_context_panel = HBoxContainer.new()
+	_context_panel.name = "ContextPanel"
+	_context_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	_context_panel.add_theme_constant_override("separation", 10)
+	bottom_row.add_child(_context_panel)
+
+	_builder_panel = HBoxContainer.new()
+	_builder_panel.name = "BuilderPanel"
+	_builder_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	_builder_panel.add_theme_constant_override("separation", 10)
+	_builder_panel.visible = false
+	_context_panel.add_child(_builder_panel)
+
+	_add_category_label("Economy")
+	_add_build_button("Power Plant", "power_plant", 800)
+	_add_build_button("Resource Center", "resource_center", 1200)
+	_add_category_label("Military")
+	_add_build_button("Barracks", "barracks", 1000)
+	_add_build_button("War Factory", "war_factory", 2000)
+	_add_category_label("Defense")
+	_add_build_button("Turret", "defense_turret", 900)
+
+	_placement_panel = HBoxContainer.new()
+	_placement_panel.name = "PlacementPanel"
+	_placement_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	_placement_panel.add_theme_constant_override("separation", 10)
+	_placement_panel.visible = false
+	_context_panel.add_child(_placement_panel)
+
+	var confirm_button := _make_button("Confirm")
+	confirm_button.pressed.connect(Callable(self, "_on_confirm_pressed"))
+	_placement_panel.add_child(confirm_button)
+
+	var cancel_button := _make_button("Cancel")
+	cancel_button.pressed.connect(Callable(self, "_on_cancel_pressed"))
+	_placement_panel.add_child(cancel_button)
+
 func _format_money(value: int) -> String:
 	var raw := str(value)
 	var result := ""
@@ -107,3 +174,39 @@ func _format_money(value: int) -> String:
 		raw = raw.substr(0, raw.length() - 3)
 	return raw + result
 
+func _add_category_label(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 18)
+	_builder_panel.add_child(label)
+
+func _add_build_button(label: String, building_id: String, cost: int) -> void:
+	var button := _make_button("%s\n$%d" % [label, cost])
+	button.pressed.connect(Callable(self, "_on_build_pressed").bind(building_id))
+	_builder_panel.add_child(button)
+	_building_buttons[building_id] = button
+
+func _make_button(label: String) -> Button:
+	var button := Button.new()
+	button.text = label
+	button.custom_minimum_size = Vector2(112.0, 64.0)
+	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	button.add_theme_font_size_override("font_size", 18)
+	return button
+
+func _on_build_pressed(building_id: String) -> void:
+	build_requested.emit(building_id)
+
+func _on_confirm_pressed() -> void:
+	placement_confirmed.emit()
+
+func _on_cancel_pressed() -> void:
+	placement_cancelled.emit()
+
+func _set_default_hint() -> void:
+	_set_hint("Tap Builder to select. Tap terrain to move. Pinch to zoom.")
+
+func _set_hint(message: String) -> void:
+	if is_instance_valid(_hint_label):
+		_hint_label.text = message

@@ -1,0 +1,12 @@
+{
+  "id": "resource_center",
+  "name": "Resource Center",
+  "category": "Economy",
+  "price": 1200,
+  "hp": 1600,
+  "build_time": 7.0,
+  "footprint": [7.0, 6.0],
+  "power_provided": 0,
+  "power_required": 40
+}
+

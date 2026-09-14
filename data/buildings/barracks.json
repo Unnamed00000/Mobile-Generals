@@ -1,0 +1,12 @@
+{
+  "id": "barracks",
+  "name": "Barracks",
+  "category": "Military",
+  "price": 1000,
+  "hp": 1400,
+  "build_time": 6.0,
+  "footprint": [6.0, 5.0],
+  "power_provided": 0,
+  "power_required": 30
+}
+
