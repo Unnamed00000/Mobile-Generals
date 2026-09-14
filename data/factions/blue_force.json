@@ -1,0 +1,8 @@
+{
+  "id": "blue_force",
+  "name": "BLUE FORCE",
+  "color": "#1f6feb",
+  "starting_units": ["builder"],
+  "future_ready": true
+}
+
