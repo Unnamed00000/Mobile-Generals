@@ -2,11 +2,14 @@ class_name RtsCamera
 extends Node3D
 
 @export var map_half_extents := Vector2(60.0, 40.0)
-@export var pan_speed := 0.035
+@export var touch_pan_speed := 0.055
+@export var two_finger_pan_multiplier := 0.6
+@export var pinch_zoom_speed := 0.065
 @export var mouse_pan_speed := 0.08
 @export var edge_pan_speed := 30.0
 @export var keyboard_pan_speed := 34.0
 @export var edge_pan_margin := 28.0
+@export var enable_desktop_test_controls := true
 @export var min_zoom := 18.0
 @export var max_zoom := 48.0
 @export var zoom_step := 2.5
@@ -15,6 +18,7 @@ extends Node3D
 
 var _touch_points: Dictionary = {}
 var _last_pinch_distance := 0.0
+var _last_pinch_center := Vector2.ZERO
 var _middle_mouse_panning := false
 
 func _ready() -> void:
@@ -24,6 +28,8 @@ func _ready() -> void:
 	_clamp_to_map()
 
 func _process(delta: float) -> void:
+	if not enable_desktop_test_controls:
+		return
 	var keyboard_direction: Vector2 = _keyboard_pan_direction()
 	var edge_direction: Vector2 = _edge_pan_direction()
 	if keyboard_direction.length_squared() > 0.0:
@@ -48,9 +54,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_screen_touch(event)
 	elif event is InputEventScreenDrag:
 		_handle_screen_drag(event)
-	elif event is InputEventMouseButton:
+	elif enable_desktop_test_controls and event is InputEventMouseButton:
 		_handle_mouse_button(event)
-	elif event is InputEventMouseMotion and _middle_mouse_panning:
+	elif enable_desktop_test_controls and event is InputEventMouseMotion and _middle_mouse_panning:
 		_pan_by_pixels(event.relative, mouse_pan_speed)
 
 func _handle_screen_touch(event: InputEventScreenTouch) -> void:
@@ -59,18 +65,25 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 	else:
 		_touch_points.erase(event.index)
 		_last_pinch_distance = 0.0
+		_last_pinch_center = Vector2.ZERO
 
 func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	_touch_points[event.index] = event.position
 
 	if _touch_points.size() == 1:
-		_pan_by_pixels(event.relative, pan_speed)
+		_pan_by_pixels(event.relative, touch_pan_speed)
 	elif _touch_points.size() == 2:
-		var points := _touch_points.values()
-		var current_distance: float = points[0].distance_to(points[1])
+		var points: Array = _touch_points.values()
+		var first_point: Vector2 = points[0]
+		var second_point: Vector2 = points[1]
+		var current_distance: float = first_point.distance_to(second_point)
+		var current_center: Vector2 = (first_point + second_point) * 0.5
 		if _last_pinch_distance > 0.0:
-			_zoom_by((_last_pinch_distance - current_distance) * 0.06)
+			_zoom_by((_last_pinch_distance - current_distance) * pinch_zoom_speed)
+		if _last_pinch_center != Vector2.ZERO:
+			_pan_by_pixels(current_center - _last_pinch_center, touch_pan_speed * two_finger_pan_multiplier)
 		_last_pinch_distance = current_distance
+		_last_pinch_center = current_center
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
 	if event.button_index == MOUSE_BUTTON_MIDDLE:
