@@ -1,0 +1,15 @@
+{
+  "id": "rpg_soldier",
+  "name": "RPG Soldier",
+  "price": 300,
+  "hp": 90,
+  "armor": 0,
+  "speed": 5.2,
+  "damage": 42,
+  "range": 12.0,
+  "fire_rate": 0.45,
+  "production_time": 5.0,
+  "unit_cap_cost": 1,
+  "tags": ["infantry", "anti_vehicle", "rpg"]
+}
+

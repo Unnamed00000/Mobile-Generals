@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/combat_unit.gd" id="1_combat"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_combat"]
+radius = 0.6
+height = 1.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_accent"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_selection"]
+albedo_color = Color(0.1, 0.95, 0.32, 0.52)
+transparency = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_selection"]
+material = SubResource("StandardMaterial3D_selection")
+top_radius = 1.25
+bottom_radius = 1.25
+height = 0.035
+radial_segments = 36
+
+[node name="CombatUnit" type="CharacterBody3D" groups=["player_units", "selectable"]]
+collision_layer = 2
+collision_mask = 4
+script = ExtResource("1_combat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_combat")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_body")
+
+[node name="Accent" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_accent")
+
+[node name="SelectionRing" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4, 0)
+visible = false
+mesh = SubResource("CylinderMesh_selection")
+
+[node name="UnitLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.05, 0)
+visible = false
+billboard = 1
+text = "Unit"
+outline_size = 6

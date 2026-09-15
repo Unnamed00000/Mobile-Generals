@@ -4,6 +4,8 @@ extends CanvasLayer
 signal build_requested(building_id: String)
 signal placement_confirmed
 signal placement_cancelled
+signal production_requested(unit_id: String)
+signal production_cancel_requested
 
 var money := 10000
 var power_current := 0
@@ -19,8 +21,11 @@ var _hint_label: Label
 var _context_panel: HBoxContainer
 var _builder_panel: HBoxContainer
 var _placement_panel: HBoxContainer
+var _production_panel: HBoxContainer
+var _production_status: Label
 var _interactive_controls: Array[Control] = []
 var _building_buttons: Dictionary = {}
+var _unit_buttons: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -52,6 +57,8 @@ func show_builder_controls(enabled: bool) -> void:
 		_builder_panel.visible = enabled
 	if is_instance_valid(_placement_panel):
 		_placement_panel.visible = false
+	if is_instance_valid(_production_panel):
+		_production_panel.visible = false
 	_set_default_hint()
 
 func show_placement_controls(building_name: String, valid: bool) -> void:
@@ -59,7 +66,31 @@ func show_placement_controls(building_name: String, valid: bool) -> void:
 		_builder_panel.visible = false
 	if is_instance_valid(_placement_panel):
 		_placement_panel.visible = true
+	if is_instance_valid(_production_panel):
+		_production_panel.visible = false
 	_set_hint("Placing %s: %s" % [building_name, "valid location" if valid else "blocked location"])
+
+func show_production_controls(building_name: String, available_units: Array, queue_names: Array[String], progress: float) -> void:
+	if is_instance_valid(_builder_panel):
+		_builder_panel.visible = false
+	if is_instance_valid(_placement_panel):
+		_placement_panel.visible = false
+	if is_instance_valid(_production_panel):
+		_production_panel.visible = true
+
+	for unit_id in _unit_buttons.keys():
+		var button := _unit_buttons[unit_id] as Button
+		button.visible = _unit_is_available(available_units, unit_id)
+		if button.visible:
+			var data := _unit_data_from_list(available_units, unit_id)
+			button.text = "%s\n$%d" % [str(data.get("name", unit_id)), int(data.get("price", 0))]
+
+	if is_instance_valid(_production_status):
+		var queue_text := "Queue empty" if queue_names.is_empty() else "Queue: " + _join_strings(queue_names, ", ")
+		if progress > 0.0 and not queue_names.is_empty():
+			queue_text += " | %d%%" % int(round(progress * 100.0))
+		_production_status.text = "%s | %s" % [building_name, queue_text]
+	_set_hint("Select production. Units spawn beside the building when ready.")
 
 func set_hint(message: String) -> void:
 	_set_hint(message)
@@ -67,6 +98,11 @@ func set_hint(message: String) -> void:
 func set_build_button_enabled(building_id: String, enabled: bool) -> void:
 	if _building_buttons.has(building_id):
 		var button := _building_buttons[building_id] as Button
+		button.disabled = not enabled
+
+func set_unit_button_enabled(unit_id: String, enabled: bool) -> void:
+	if _unit_buttons.has(unit_id):
+		var button := _unit_buttons[unit_id] as Button
 		button.disabled = not enabled
 
 func is_screen_position_over_ui(screen_position: Vector2) -> bool:
@@ -166,6 +202,28 @@ func _build_ui() -> void:
 	cancel_button.pressed.connect(Callable(self, "_on_cancel_pressed"))
 	_placement_panel.add_child(cancel_button)
 
+	_production_panel = HBoxContainer.new()
+	_production_panel.name = "ProductionPanel"
+	_production_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	_production_panel.add_theme_constant_override("separation", 10)
+	_production_panel.visible = false
+	_context_panel.add_child(_production_panel)
+
+	_production_status = Label.new()
+	_production_status.custom_minimum_size = Vector2(300.0, 64.0)
+	_production_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_production_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_production_status.add_theme_font_size_override("font_size", 18)
+	_production_panel.add_child(_production_status)
+
+	_add_unit_button("Rifleman", "rifleman", 150)
+	_add_unit_button("RPG", "rpg_soldier", 300)
+	_add_unit_button("Tank", "main_battle_tank", 900)
+
+	var cancel_queue_button := _make_button("Cancel\nQueue")
+	cancel_queue_button.pressed.connect(Callable(self, "_on_cancel_production_pressed"))
+	_production_panel.add_child(cancel_queue_button)
+
 func _format_money(value: int) -> String:
 	var raw := str(value)
 	var result := ""
@@ -187,6 +245,13 @@ func _add_build_button(label: String, building_id: String, cost: int) -> void:
 	_builder_panel.add_child(button)
 	_building_buttons[building_id] = button
 
+func _add_unit_button(label: String, unit_id: String, cost: int) -> void:
+	var button := _make_button("%s\n$%d" % [label, cost])
+	button.visible = false
+	button.pressed.connect(Callable(self, "_on_unit_pressed").bind(unit_id))
+	_production_panel.add_child(button)
+	_unit_buttons[unit_id] = button
+
 func _make_button(label: String) -> Button:
 	var button := Button.new()
 	button.text = label
@@ -204,9 +269,35 @@ func _on_confirm_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	placement_cancelled.emit()
 
+func _on_unit_pressed(unit_id: String) -> void:
+	production_requested.emit(unit_id)
+
+func _on_cancel_production_pressed() -> void:
+	production_cancel_requested.emit()
+
 func _set_default_hint() -> void:
 	_set_hint("Tap Builder to select. Tap terrain to move. Pinch to zoom.")
 
 func _set_hint(message: String) -> void:
 	if is_instance_valid(_hint_label):
 		_hint_label.text = message
+
+func _unit_data_from_list(available_units: Array, unit_id: String) -> Dictionary:
+	for item in available_units:
+		if str(item.get("id", "")) == unit_id:
+			return item
+	return {}
+
+func _unit_is_available(available_units: Array, unit_id: String) -> bool:
+	for item in available_units:
+		if str(item.get("id", "")) == unit_id:
+			return true
+	return false
+
+func _join_strings(values: Array[String], separator: String) -> String:
+	var result := ""
+	for index in values.size():
+		if index > 0:
+			result += separator
+		result += values[index]
+	return result

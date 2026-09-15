@@ -1,0 +1,14 @@
+{
+  "id": "main_battle_tank",
+  "name": "Main Battle Tank",
+  "price": 900,
+  "hp": 650,
+  "armor": 6,
+  "speed": 4.5,
+  "damage": 65,
+  "range": 15.0,
+  "fire_rate": 0.55,
+  "production_time": 9.0,
+  "unit_cap_cost": 3,
+  "tags": ["vehicle", "tank", "heavy"]
+}

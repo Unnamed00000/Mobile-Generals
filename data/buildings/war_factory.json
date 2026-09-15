@@ -7,6 +7,6 @@
   "build_time": 9.0,
   "footprint": [8.0, 7.0],
   "power_provided": 0,
-  "power_required": 60
+  "power_required": 60,
+  "produces": ["main_battle_tank"]
 }
-

@@ -1,0 +1,15 @@
+{
+  "id": "rifleman",
+  "name": "Rifleman",
+  "price": 150,
+  "hp": 100,
+  "armor": 0,
+  "speed": 5.8,
+  "damage": 12,
+  "range": 10.0,
+  "fire_rate": 1.2,
+  "production_time": 3.0,
+  "unit_cap_cost": 1,
+  "tags": ["infantry", "rifle"]
+}
+

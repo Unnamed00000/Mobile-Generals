@@ -3,12 +3,20 @@ extends Node3D
 
 const BUILDER_SCENE := preload("res://scenes/units/builder.tscn")
 const RESOURCE_HARVESTER_SCENE := preload("res://scenes/units/resource_harvester.tscn")
+const COMBAT_UNIT_SCENE := preload("res://scenes/units/combat_unit.tscn")
 const BUILDING_DATA_PATHS := {
 	"power_plant": "res://data/buildings/power_plant.json",
 	"resource_center": "res://data/buildings/resource_center.json",
 	"barracks": "res://data/buildings/barracks.json",
 	"war_factory": "res://data/buildings/war_factory.json",
 	"defense_turret": "res://data/buildings/defense_turret.json"
+}
+const UNIT_DATA_PATHS := {
+	"builder": "res://data/units/builder.json",
+	"resource_harvester": "res://data/units/resource_harvester.json",
+	"rifleman": "res://data/units/rifleman.json",
+	"rpg_soldier": "res://data/units/rpg_soldier.json",
+	"main_battle_tank": "res://data/units/main_battle_tank.json"
 }
 
 @onready var prototype_map: PrototypeMap = $PrototypeMap
@@ -18,6 +26,7 @@ const BUILDING_DATA_PATHS := {
 @onready var hud: MatchHud = $MatchHUD
 
 var selected_units: Array[MobileUnit] = []
+var selected_building: Building
 var money := 10000
 var power_current := 0
 var power_max := 0
@@ -25,7 +34,9 @@ var unit_count := 1
 var unit_cap := 60
 
 var building_data: Dictionary = {}
+var unit_data: Dictionary = {}
 var active_builds: Array[Dictionary] = []
+var active_productions: Array[Dictionary] = []
 
 var _primary_touch_start := Vector2.ZERO
 var _primary_touch_dragged := false
@@ -38,9 +49,12 @@ var _placement_valid := false
 
 func _ready() -> void:
 	_load_building_data()
+	_load_unit_data()
 	hud.build_requested.connect(Callable(self, "_on_build_requested"))
 	hud.placement_confirmed.connect(Callable(self, "_on_placement_confirmed"))
 	hud.placement_cancelled.connect(Callable(self, "_cancel_placement"))
+	hud.production_requested.connect(Callable(self, "_on_production_requested"))
+	hud.production_cancel_requested.connect(Callable(self, "_on_production_cancel_requested"))
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
 	_spawn_builder()
 	_create_command_marker()
@@ -49,6 +63,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_active_builds(delta)
+	_update_active_productions(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
@@ -102,6 +117,11 @@ func _process_primary_tap(screen_position: Vector2) -> void:
 		_select_single(selectable)
 		return
 
+	var building := _building_from_collider(hit.get("collider"))
+	if building != null and building.team_id == 1:
+		_select_building(building)
+		return
+
 	if not selected_units.is_empty() and _is_ground_hit(hit):
 		_move_selected_to(hit.position)
 	else:
@@ -137,21 +157,44 @@ func _selectable_from_collider(collider: Object) -> MobileUnit:
 		node = node.get_parent()
 	return null
 
+func _building_from_collider(collider: Object) -> Building:
+	var node := collider as Node
+	while node != null:
+		if node is Building:
+			return node as Building
+		node = node.get_parent()
+	return null
+
 func _is_ground_hit(hit: Dictionary) -> bool:
 	var collider := hit.get("collider") as Node
 	return collider != null and collider.is_in_group("command_ground")
 
 func _select_single(unit: MobileUnit) -> void:
 	_clear_selection()
+	selected_building = null
 	selected_units.append(unit)
 	unit.set_selected(true)
 	_update_hud_selection()
+
+func _select_building(building: Building) -> void:
+	_clear_selection()
+	selected_building = building
+	hud.update_selection(1, building.display_name)
+	if not building.is_complete:
+		hud.show_builder_controls(false)
+		hud.set_hint("%s is still under construction." % building.display_name)
+	elif building.produces.is_empty():
+		hud.show_builder_controls(false)
+		hud.set_hint("%s is ready." % building.display_name)
+	else:
+		_update_hud_production()
 
 func _clear_selection() -> void:
 	for unit in selected_units:
 		if is_instance_valid(unit):
 			unit.set_selected(false)
 	selected_units.clear()
+	selected_building = null
 	_update_hud_selection()
 
 func _move_selected_to(world_position: Vector3) -> void:
@@ -242,6 +285,19 @@ func _load_building_data() -> void:
 			building_data[building_id] = parsed
 		else:
 			push_warning("Invalid building data: %s" % path)
+
+func _load_unit_data() -> void:
+	for unit_id in UNIT_DATA_PATHS.keys():
+		var path: String = UNIT_DATA_PATHS[unit_id]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			push_warning("Missing unit data: %s" % path)
+			continue
+		var parsed = JSON.parse_string(file.get_as_text())
+		if parsed is Dictionary:
+			unit_data[unit_id] = parsed
+		else:
+			push_warning("Invalid unit data: %s" % path)
 
 func _on_build_requested(building_id: String) -> void:
 	if not building_data.has(building_id):
@@ -371,6 +427,8 @@ func _apply_completed_building_stats(building: Building) -> void:
 	power_current += building.power_required
 	if building.building_id == "resource_center":
 		_spawn_resource_harvester(building)
+	if selected_building == building:
+		_update_hud_production()
 	_update_match_stats()
 
 func _can_place_building(building: Building, at: Vector3) -> bool:
@@ -421,6 +479,8 @@ func _update_match_stats() -> void:
 	hud.update_match_stats(money, power_current, power_max, unit_count, unit_cap)
 	for building_id in building_data.keys():
 		hud.set_build_button_enabled(building_id, money >= int(building_data[building_id].get("price", 0)))
+	for unit_id in unit_data.keys():
+		hud.set_unit_button_enabled(unit_id, _can_afford_and_fit_unit(unit_id))
 
 func _spawn_resource_harvester(resource_center: Building) -> void:
 	if unit_count >= unit_cap:
@@ -466,3 +526,149 @@ func _harvester_spawn_position(resource_center: Building) -> Vector3:
 	target.x = clampf(target.x, -half_map.x, half_map.x)
 	target.z = clampf(target.z, -half_map.y, half_map.y)
 	return target
+
+func _on_production_requested(unit_id: String) -> void:
+	if selected_building == null or not is_instance_valid(selected_building):
+		hud.set_hint("Select Barracks or War Factory first.")
+		return
+	if not selected_building.is_complete:
+		hud.set_hint("%s is not ready yet." % selected_building.display_name)
+		return
+	if not selected_building.produces.has(unit_id):
+		hud.set_hint("%s cannot produce that unit." % selected_building.display_name)
+		return
+	if not unit_data.has(unit_id):
+		hud.set_hint("Missing unit data: %s" % unit_id)
+		return
+	if not _can_afford_and_fit_unit(unit_id):
+		hud.set_hint("Not enough money or unit cap for %s." % str(unit_data[unit_id].get("name", unit_id)))
+		return
+
+	var data: Dictionary = unit_data[unit_id]
+	money -= int(data.get("price", 0))
+	unit_count += int(data.get("unit_cap_cost", 1))
+	selected_building.production_queue.append(unit_id)
+	_start_next_production_if_idle(selected_building)
+	_update_match_stats()
+	_update_hud_production()
+
+func _on_production_cancel_requested() -> void:
+	if selected_building == null or not is_instance_valid(selected_building):
+		return
+
+	var cancelled_unit_id := ""
+	if not selected_building.production_queue.is_empty():
+		cancelled_unit_id = selected_building.production_queue.pop_back()
+	else:
+		for index in range(active_productions.size() - 1, -1, -1):
+			var order := active_productions[index]
+			if order.get("building") == selected_building:
+				cancelled_unit_id = str(order.get("unit_id", ""))
+				active_productions.remove_at(index)
+				selected_building.set_production_display("", 0.0, 0)
+				break
+
+	if cancelled_unit_id.is_empty() or not unit_data.has(cancelled_unit_id):
+		hud.set_hint("Production queue is empty.")
+		return
+
+	var data: Dictionary = unit_data[cancelled_unit_id]
+	money += int(data.get("price", 0))
+	unit_count = max(0, unit_count - int(data.get("unit_cap_cost", 1)))
+	hud.set_hint("Cancelled %s." % str(data.get("name", cancelled_unit_id)))
+	_start_next_production_if_idle(selected_building)
+	_update_match_stats()
+	_update_hud_production()
+
+func _update_active_productions(delta: float) -> void:
+	for index in range(active_productions.size() - 1, -1, -1):
+		var order := active_productions[index]
+		var building := order.get("building") as Building
+		if not is_instance_valid(building):
+			active_productions.remove_at(index)
+			continue
+
+		var unit_id := str(order.get("unit_id", ""))
+		if not unit_data.has(unit_id):
+			active_productions.remove_at(index)
+			continue
+
+		var data: Dictionary = unit_data[unit_id]
+		order["elapsed"] = float(order.get("elapsed", 0.0)) + delta
+		var progress := float(order["elapsed"]) / maxf(float(data.get("production_time", 1.0)), 0.1)
+		building.set_production_display(str(data.get("name", unit_id)), progress, building.production_queue.size())
+
+		if progress >= 1.0:
+			active_productions.remove_at(index)
+			_spawn_produced_unit(unit_id, building)
+			building.set_production_display("", 0.0, building.production_queue.size())
+			_start_next_production_if_idle(building)
+			if selected_building == building:
+				_update_hud_production()
+
+	if selected_building != null and is_instance_valid(selected_building) and selected_building.produces.size() > 0:
+		_update_hud_production()
+
+func _start_next_production_if_idle(building: Building) -> void:
+	if _is_building_producing(building) or building.production_queue.is_empty():
+		return
+	var unit_id := building.production_queue.pop_front()
+	active_productions.append({
+		"building": building,
+		"unit_id": unit_id,
+		"elapsed": 0.0
+	})
+
+func _is_building_producing(building: Building) -> bool:
+	for order in active_productions:
+		if order.get("building") == building:
+			return true
+	return false
+
+func _spawn_produced_unit(unit_id: String, building: Building) -> void:
+	var data: Dictionary = unit_data[unit_id]
+	var unit := COMBAT_UNIT_SCENE.instantiate() as CombatUnit
+	unit.name = str(data.get("name", unit_id)).replace(" ", "")
+	unit.configure(data, building.team_id)
+	unit.global_position = _unit_spawn_position(building)
+	units_root.add_child(unit)
+	hud.set_hint("%s ready." % unit.display_name)
+
+func _unit_spawn_position(building: Building) -> Vector3:
+	var offset := Vector3(building.footprint.x * 0.5 + 2.6, 0.45, building.production_queue.size() * 1.2)
+	var target := building.global_position + offset
+	var half_map := prototype_map.get_half_extents()
+	target.x = clampf(target.x, -half_map.x, half_map.x)
+	target.z = clampf(target.z, -half_map.y, half_map.y)
+	return target
+
+func _can_afford_and_fit_unit(unit_id: String) -> bool:
+	if not unit_data.has(unit_id):
+		return false
+	var data: Dictionary = unit_data[unit_id]
+	return money >= int(data.get("price", 0)) and unit_count + int(data.get("unit_cap_cost", 1)) <= unit_cap
+
+func _update_hud_production() -> void:
+	if selected_building == null or not is_instance_valid(selected_building) or selected_building.produces.is_empty():
+		return
+
+	var available_units: Array = []
+	for unit_id in selected_building.produces:
+		if unit_data.has(unit_id):
+			available_units.append(unit_data[unit_id])
+
+	var queue_names: Array[String] = []
+	var progress := 0.0
+	for order in active_productions:
+		if order.get("building") == selected_building:
+			var active_unit_id := str(order.get("unit_id", ""))
+			if unit_data.has(active_unit_id):
+				queue_names.append(str(unit_data[active_unit_id].get("name", active_unit_id)))
+				var data: Dictionary = unit_data[active_unit_id]
+				progress = float(order.get("elapsed", 0.0)) / maxf(float(data.get("production_time", 1.0)), 0.1)
+			break
+	for queued_unit_id in selected_building.production_queue:
+		if unit_data.has(queued_unit_id):
+			queue_names.append(str(unit_data[queued_unit_id].get("name", queued_unit_id)))
+
+	hud.show_production_controls(selected_building.display_name, available_units, queue_names, progress)

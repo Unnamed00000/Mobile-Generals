@@ -10,13 +10,18 @@ extends StaticBody3D
 @export var max_hp := 1000
 @export var power_provided := 0
 @export var power_required := 0
+@export var produces: Array[String] = []
 
 var is_preview := false
 var is_complete := false
 var construction_progress := 0.0
+var production_queue: Array[String] = []
+var current_production_id := ""
+var production_progress := 0.0
 
 var _body_mesh: MeshInstance3D
 var _progress_label: Label3D
+var _production_label: Label3D
 var _ready_material: StandardMaterial3D
 var _valid_preview_material: StandardMaterial3D
 var _invalid_preview_material: StandardMaterial3D
@@ -38,6 +43,9 @@ func configure(data: Dictionary, new_team_id: int) -> void:
 	max_hp = int(data.get("hp", max_hp))
 	power_provided = int(data.get("power_provided", power_provided))
 	power_required = int(data.get("power_required", power_required))
+	produces.clear()
+	for unit_id in data.get("produces", []):
+		produces.append(str(unit_id))
 	var footprint_value: Array = data.get("footprint", [footprint.x, footprint.y])
 	if footprint_value.size() >= 2:
 		footprint = Vector2(float(footprint_value[0]), float(footprint_value[1]))
@@ -79,6 +87,17 @@ func finish_construction() -> void:
 		_progress_label.text = display_name
 		_progress_label.visible = true
 
+func set_production_display(unit_name: String, progress: float, queued_count: int) -> void:
+	current_production_id = unit_name
+	production_progress = clampf(progress, 0.0, 1.0)
+	if not is_instance_valid(_production_label):
+		return
+	if unit_name.is_empty():
+		_production_label.visible = false
+		return
+	_production_label.visible = true
+	_production_label.text = "Producing %s %d%% | Queue %d" % [unit_name, int(round(production_progress * 100.0)), queued_count]
+
 func _build_placeholder_model() -> void:
 	_ready_material = _make_material(_color_for_building(), 1.0)
 	_valid_preview_material = _make_material(Color(0.12, 0.88, 0.28), 0.42)
@@ -111,6 +130,15 @@ func _build_placeholder_model() -> void:
 	_progress_label.outline_size = 8
 	_progress_label.visible = false
 	add_child(_progress_label)
+
+	_production_label = Label3D.new()
+	_production_label.name = "ProductionLabel"
+	_production_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_production_label.position = Vector3(0.0, mesh.size.y + 1.55, 0.0)
+	_production_label.modulate = Color(0.82, 0.95, 1.0)
+	_production_label.outline_size = 8
+	_production_label.visible = false
+	add_child(_production_label)
 
 func _make_material(color: Color, alpha: float) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
@@ -149,4 +177,3 @@ func _color_for_building() -> Color:
 			return Color(0.44, 0.45, 0.42)
 		_:
 			return Color(0.35, 0.39, 0.44)
-
