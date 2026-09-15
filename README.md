@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the in-project working title stays `Mobile RTS Prototype` to keep the game identity original.
 
-This repository currently includes Milestones 1-4 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, and unit production.
+This repository currently includes Milestones 1-5 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, and mobile command buttons.
 
 ## Requirements
 
@@ -28,6 +28,8 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Select the Builder, tap a building button, drag/tap a placement location, then press Confirm.
 - Build a Resource Center to deploy one Resource Truck. It automatically gathers resources and delivers +$500.
 - Select Barracks to produce Rifleman/RPG Soldier. Select War Factory to produce a Tank.
+- Use All/Infantry/RPG/Tanks filters to select combat units. Long-press group 1-4 to save, tap 1-4 to recall.
+- Use Move, Attack Move, and Stop from the army panel. Attack is reserved for Milestone 6 enemies/combat.
 
 ### Desktop Debug
 
@@ -39,6 +41,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Select Builder, click a building button, move the ghost over terrain, then Confirm.
 - Build a Resource Center to watch the Resource Truck loop between the resource field and the center.
 - Select Barracks or War Factory, then click unit buttons to fill the production queue.
+- Use Ctrl+1 through Ctrl+4 to save selected combat units into groups. Press 1 through 4 to recall.
 
 ## Project Structure
 
@@ -78,8 +81,9 @@ res://
 - Milestone 2: construction placement, Power Plant, Resource Center, Barracks, War Factory, Defense Turret placeholders.
 - Milestone 3: Resource Center economy loop, Resource Truck, and +$500 deliveries.
 - Milestone 4: Rifleman, RPG Soldier, Main Battle Tank, and production queues from Barracks and War Factory.
-- Milestone 5 next: mobile army selection categories, groups 1-4, Move, Attack, Attack Move, Stop.
-- Later milestones: combat, AI, minimap, Android polish.
+- Milestone 5: mobile army selection categories, groups 1-4, Move, Attack placeholder, Attack Move, Stop.
+- Milestone 6 next: enemies, combat, damage, destruction, and automatic attack behavior.
+- Later milestones: AI, minimap, Android polish.
 
 ## Android Notes
 

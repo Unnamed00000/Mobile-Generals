@@ -8,12 +8,14 @@ signal command_completed(unit: MobileUnit)
 @export var team_id := 1
 @export var move_speed := 7.0
 @export var stopping_distance := 0.45
+@export var unit_tags: Array[String] = []
 
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 
 var is_selected := false
 var destination: Vector3
 var has_move_order := false
+var command_mode := "idle"
 
 func _ready() -> void:
 	add_to_group("selectable")
@@ -54,14 +56,24 @@ func move_to(world_position: Vector3) -> void:
 	destination = world_position
 	destination.y = global_position.y
 	has_move_order = true
+	command_mode = "move"
+
+func attack_move_to(world_position: Vector3) -> void:
+	destination = world_position
+	destination.y = global_position.y
+	has_move_order = true
+	command_mode = "attack_move"
 
 func stop() -> void:
 	has_move_order = false
 	velocity = Vector3.ZERO
+	command_mode = "stop"
+
+func has_tag(tag: String) -> bool:
+	return unit_tags.has(tag)
 
 func _look_towards(direction: Vector3) -> void:
 	if direction.length_squared() <= 0.001:
 		return
 	var target_basis := Basis.looking_at(direction, Vector3.UP)
 	basis = basis.slerp(target_basis, 0.22)
-

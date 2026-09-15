@@ -22,6 +22,9 @@ func configure(data: Dictionary, new_team_id: int) -> void:
 	attack_range = float(data.get("range", attack_range))
 	fire_rate = float(data.get("fire_rate", fire_rate))
 	unit_cap_cost = int(data.get("unit_cap_cost", unit_cap_cost))
+	unit_tags.clear()
+	for tag in data.get("tags", []):
+		unit_tags.append(str(tag))
 	team_id = new_team_id
 
 func _ready() -> void:
@@ -94,4 +97,3 @@ func _accent_position() -> Vector3:
 			return Vector3(0.0, 1.15, -0.2)
 		_:
 			return Vector3(0.0, 1.0, -0.25)
-

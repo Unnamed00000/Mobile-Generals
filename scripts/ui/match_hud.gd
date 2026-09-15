@@ -6,6 +6,10 @@ signal placement_confirmed
 signal placement_cancelled
 signal production_requested(unit_id: String)
 signal production_cancel_requested
+signal army_filter_requested(filter_id: String, visible_only: bool)
+signal army_command_requested(command_id: String)
+signal group_selected(group_id: int)
+signal group_saved(group_id: int)
 
 var money := 10000
 var power_current := 0
@@ -23,9 +27,13 @@ var _builder_panel: HBoxContainer
 var _placement_panel: HBoxContainer
 var _production_panel: HBoxContainer
 var _production_status: Label
+var _army_panel: HBoxContainer
+var _army_visible_toggle: CheckButton
 var _interactive_controls: Array[Control] = []
 var _building_buttons: Dictionary = {}
 var _unit_buttons: Dictionary = {}
+var _group_buttons: Dictionary = {}
+var _group_press_started_at: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -59,6 +67,8 @@ func show_builder_controls(enabled: bool) -> void:
 		_placement_panel.visible = false
 	if is_instance_valid(_production_panel):
 		_production_panel.visible = false
+	if is_instance_valid(_army_panel):
+		_army_panel.visible = false
 	_set_default_hint()
 
 func show_placement_controls(building_name: String, valid: bool) -> void:
@@ -68,6 +78,8 @@ func show_placement_controls(building_name: String, valid: bool) -> void:
 		_placement_panel.visible = true
 	if is_instance_valid(_production_panel):
 		_production_panel.visible = false
+	if is_instance_valid(_army_panel):
+		_army_panel.visible = false
 	_set_hint("Placing %s: %s" % [building_name, "valid location" if valid else "blocked location"])
 
 func show_production_controls(building_name: String, available_units: Array, queue_names: Array[String], progress: float) -> void:
@@ -77,6 +89,8 @@ func show_production_controls(building_name: String, available_units: Array, que
 		_placement_panel.visible = false
 	if is_instance_valid(_production_panel):
 		_production_panel.visible = true
+	if is_instance_valid(_army_panel):
+		_army_panel.visible = false
 
 	for unit_id in _unit_buttons.keys():
 		var button := _unit_buttons[unit_id] as Button
@@ -92,6 +106,17 @@ func show_production_controls(building_name: String, available_units: Array, que
 		_production_status.text = "%s | %s" % [building_name, queue_text]
 	_set_hint("Select production. Units spawn beside the building when ready.")
 
+func show_army_controls(count: int) -> void:
+	if is_instance_valid(_builder_panel):
+		_builder_panel.visible = false
+	if is_instance_valid(_placement_panel):
+		_placement_panel.visible = false
+	if is_instance_valid(_production_panel):
+		_production_panel.visible = false
+	if is_instance_valid(_army_panel):
+		_army_panel.visible = true
+	_set_hint("Army selected: %d. Use commands or quick filters." % count)
+
 func set_hint(message: String) -> void:
 	_set_hint(message)
 
@@ -104,6 +129,11 @@ func set_unit_button_enabled(unit_id: String, enabled: bool) -> void:
 	if _unit_buttons.has(unit_id):
 		var button := _unit_buttons[unit_id] as Button
 		button.disabled = not enabled
+
+func set_group_count(group_id: int, count: int) -> void:
+	if _group_buttons.has(group_id):
+		var button := _group_buttons[group_id] as Button
+		button.text = "%d\n%d" % [group_id, count]
 
 func is_screen_position_over_ui(screen_position: Vector2) -> bool:
 	for control in _interactive_controls:
@@ -224,6 +254,33 @@ func _build_ui() -> void:
 	cancel_queue_button.pressed.connect(Callable(self, "_on_cancel_production_pressed"))
 	_production_panel.add_child(cancel_queue_button)
 
+	_army_panel = HBoxContainer.new()
+	_army_panel.name = "ArmyPanel"
+	_army_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	_army_panel.add_theme_constant_override("separation", 8)
+	_army_panel.visible = false
+	_context_panel.add_child(_army_panel)
+
+	_army_visible_toggle = CheckButton.new()
+	_army_visible_toggle.text = "Visible"
+	_army_visible_toggle.button_pressed = false
+	_army_visible_toggle.custom_minimum_size = Vector2(96.0, 64.0)
+	_army_visible_toggle.add_theme_font_size_override("font_size", 18)
+	_army_panel.add_child(_army_visible_toggle)
+
+	_add_army_filter_button("All", "all")
+	_add_army_filter_button("Infantry", "infantry")
+	_add_army_filter_button("RPG", "rpg")
+	_add_army_filter_button("Tanks", "tanks")
+
+	for group_id in range(1, 5):
+		_add_group_button(group_id)
+
+	_add_army_command_button("Move", "move")
+	_add_army_command_button("Attack\nMove", "attack_move")
+	_add_army_command_button("Attack", "attack")
+	_add_army_command_button("Stop", "stop")
+
 func _format_money(value: int) -> String:
 	var raw := str(value)
 	var result := ""
@@ -275,6 +332,23 @@ func _on_unit_pressed(unit_id: String) -> void:
 func _on_cancel_production_pressed() -> void:
 	production_cancel_requested.emit()
 
+func _on_army_filter_pressed(filter_id: String) -> void:
+	army_filter_requested.emit(filter_id, _army_visible_toggle.button_pressed if is_instance_valid(_army_visible_toggle) else false)
+
+func _on_army_command_pressed(command_id: String) -> void:
+	army_command_requested.emit(command_id)
+
+func _on_group_button_down(group_id: int) -> void:
+	_group_press_started_at[group_id] = Time.get_ticks_msec()
+
+func _on_group_button_up(group_id: int) -> void:
+	var started_at := int(_group_press_started_at.get(group_id, Time.get_ticks_msec()))
+	_group_press_started_at.erase(group_id)
+	if Time.get_ticks_msec() - started_at >= 550:
+		group_saved.emit(group_id)
+	else:
+		group_selected.emit(group_id)
+
 func _set_default_hint() -> void:
 	_set_hint("Tap Builder to select. Tap terrain to move. Pinch to zoom.")
 
@@ -301,3 +375,21 @@ func _join_strings(values: Array[String], separator: String) -> String:
 			result += separator
 		result += values[index]
 	return result
+
+func _add_army_filter_button(label: String, filter_id: String) -> void:
+	var button := _make_button(label)
+	button.pressed.connect(Callable(self, "_on_army_filter_pressed").bind(filter_id))
+	_army_panel.add_child(button)
+
+func _add_army_command_button(label: String, command_id: String) -> void:
+	var button := _make_button(label)
+	button.pressed.connect(Callable(self, "_on_army_command_pressed").bind(command_id))
+	_army_panel.add_child(button)
+
+func _add_group_button(group_id: int) -> void:
+	var button := _make_button("%d\n0" % group_id)
+	button.custom_minimum_size = Vector2(64.0, 64.0)
+	button.button_down.connect(Callable(self, "_on_group_button_down").bind(group_id))
+	button.button_up.connect(Callable(self, "_on_group_button_up").bind(group_id))
+	_army_panel.add_child(button)
+	_group_buttons[group_id] = button

@@ -37,6 +37,12 @@ var building_data: Dictionary = {}
 var unit_data: Dictionary = {}
 var active_builds: Array[Dictionary] = []
 var active_productions: Array[Dictionary] = []
+var army_groups := {
+	1: [],
+	2: [],
+	3: [],
+	4: []
+}
 
 var _primary_touch_start := Vector2.ZERO
 var _primary_touch_dragged := false
@@ -46,6 +52,7 @@ var _placement_preview: Building
 var _placement_building_id := ""
 var _placement_position := Vector3.ZERO
 var _placement_valid := false
+var _pending_army_command := ""
 
 func _ready() -> void:
 	_load_building_data()
@@ -55,6 +62,10 @@ func _ready() -> void:
 	hud.placement_cancelled.connect(Callable(self, "_cancel_placement"))
 	hud.production_requested.connect(Callable(self, "_on_production_requested"))
 	hud.production_cancel_requested.connect(Callable(self, "_on_production_cancel_requested"))
+	hud.army_filter_requested.connect(Callable(self, "_on_army_filter_requested"))
+	hud.army_command_requested.connect(Callable(self, "_on_army_command_requested"))
+	hud.group_selected.connect(Callable(self, "_on_group_selected"))
+	hud.group_saved.connect(Callable(self, "_on_group_saved"))
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
 	_spawn_builder()
 	_create_command_marker()
@@ -80,6 +91,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_placement_from_screen(event.position)
 	elif event is InputEventMouseButton and event.pressed:
 		_handle_mouse_button(event)
+	elif event is InputEventKey and event.pressed and not event.echo:
+		_handle_key_press(event)
 
 func _handle_touch(event: InputEventScreenTouch) -> void:
 	if hud.is_screen_position_over_ui(event.position):
@@ -117,6 +130,10 @@ func _process_primary_tap(screen_position: Vector2) -> void:
 		_select_single(selectable)
 		return
 
+	if _has_army_selection() and not _pending_army_command.is_empty():
+		_process_pending_army_command(hit)
+		return
+
 	var building := _building_from_collider(hit.get("collider"))
 	if building != null and building.team_id == 1:
 		_select_building(building)
@@ -138,6 +155,14 @@ func _issue_move_command(screen_position: Vector2) -> void:
 	var hit := _raycast_from_screen(screen_position)
 	if not hit.is_empty() and _is_ground_hit(hit):
 		_move_selected_to(hit.position)
+
+func _handle_key_press(event: InputEventKey) -> void:
+	if event.keycode >= KEY_1 and event.keycode <= KEY_4:
+		var group_id := int(event.keycode - KEY_0)
+		if event.ctrl_pressed:
+			_on_group_saved(group_id)
+		else:
+			_on_group_selected(group_id)
 
 func _raycast_from_screen(screen_position: Vector2) -> Dictionary:
 	var camera := camera_controller.get_camera()
@@ -176,6 +201,15 @@ func _select_single(unit: MobileUnit) -> void:
 	unit.set_selected(true)
 	_update_hud_selection()
 
+func _select_units(units: Array[MobileUnit]) -> void:
+	_clear_selection()
+	selected_building = null
+	for unit in units:
+		if is_instance_valid(unit) and unit.team_id == 1:
+			selected_units.append(unit)
+			unit.set_selected(true)
+	_update_hud_selection()
+
 func _select_building(building: Building) -> void:
 	_clear_selection()
 	selected_building = building
@@ -204,6 +238,24 @@ func _move_selected_to(world_position: Vector3) -> void:
 		if is_instance_valid(unit):
 			unit.move_to(world_position + offsets[i])
 	_show_command_marker(world_position)
+	_pending_army_command = ""
+
+func _attack_move_selected_to(world_position: Vector3) -> void:
+	var offsets := _formation_offsets(selected_units.size())
+	for i in selected_units.size():
+		var unit := selected_units[i]
+		if is_instance_valid(unit):
+			unit.attack_move_to(world_position + offsets[i])
+	_show_command_marker(world_position)
+	_pending_army_command = ""
+	hud.set_hint("Attack Move issued. Auto-targeting comes with combat in Milestone 6.")
+
+func _stop_selected_units() -> void:
+	for unit in selected_units:
+		if is_instance_valid(unit):
+			unit.stop()
+	_pending_army_command = ""
+	hud.set_hint("Selected units stopped.")
 
 func _formation_offsets(count: int) -> Array[Vector3]:
 	var offsets: Array[Vector3] = []
@@ -265,13 +317,18 @@ func _hide_command_marker() -> void:
 func _update_hud_selection() -> void:
 	if selected_units.is_empty():
 		hud.update_selection(0, "None")
-		hud.show_builder_controls(false)
+		hud.show_army_controls(0)
 	elif selected_units.size() == 1 and is_instance_valid(selected_units[0]):
 		hud.update_selection(1, selected_units[0].display_name)
-		hud.show_builder_controls(selected_units[0] is BuilderUnit and not _is_placing_building())
+		if selected_units[0] is BuilderUnit:
+			hud.show_builder_controls(not _is_placing_building())
+		elif selected_units[0] is CombatUnit:
+			hud.show_army_controls(1)
+		else:
+			hud.show_builder_controls(false)
 	else:
 		hud.update_selection(selected_units.size(), "Units")
-		hud.show_builder_controls(false)
+		hud.show_army_controls(_combat_selection_count())
 
 func _load_building_data() -> void:
 	for building_id in BUILDING_DATA_PATHS.keys():
@@ -633,6 +690,7 @@ func _spawn_produced_unit(unit_id: String, building: Building) -> void:
 	unit.global_position = _unit_spawn_position(building)
 	units_root.add_child(unit)
 	hud.set_hint("%s ready." % unit.display_name)
+	_update_group_counts()
 
 func _unit_spawn_position(building: Building) -> Vector3:
 	var offset := Vector3(building.footprint.x * 0.5 + 2.6, 0.45, building.production_queue.size() * 1.2)
@@ -672,3 +730,98 @@ func _update_hud_production() -> void:
 			queue_names.append(str(unit_data[queued_unit_id].get("name", queued_unit_id)))
 
 	hud.show_production_controls(selected_building.display_name, available_units, queue_names, progress)
+
+func _on_army_filter_requested(filter_id: String, visible_only: bool) -> void:
+	var matching_units: Array[MobileUnit] = []
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var unit := node as MobileUnit
+		if unit == null or not is_instance_valid(unit) or not (unit is CombatUnit):
+			continue
+		if visible_only and not camera_controller.get_camera().is_position_in_frustum(unit.global_position):
+			continue
+		if _unit_matches_filter(unit, filter_id):
+			matching_units.append(unit)
+	_select_units(matching_units)
+	hud.set_hint("Selected %d unit(s) for %s." % [matching_units.size(), filter_id])
+
+func _on_army_command_requested(command_id: String) -> void:
+	if command_id == "stop":
+		_stop_selected_units()
+		return
+	if not _has_army_selection():
+		hud.set_hint("Select combat units first.")
+		return
+	_pending_army_command = command_id
+	match command_id:
+		"move":
+			hud.set_hint("MOVE: tap terrain.")
+		"attack_move":
+			hud.set_hint("ATTACK MOVE: tap destination.")
+		"attack":
+			hud.set_hint("ATTACK: tap an enemy target after Milestone 6 adds enemies.")
+
+func _on_group_saved(group_id: int) -> void:
+	if not army_groups.has(group_id):
+		return
+	var saved: Array[MobileUnit] = []
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit.team_id == 1 and unit is CombatUnit:
+			saved.append(unit)
+	army_groups[group_id] = saved
+	_update_group_counts()
+	hud.set_hint("Group %d saved with %d unit(s)." % [group_id, saved.size()])
+
+func _on_group_selected(group_id: int) -> void:
+	if not army_groups.has(group_id):
+		return
+	var live_units: Array[MobileUnit] = []
+	for unit in army_groups[group_id]:
+		if is_instance_valid(unit):
+			live_units.append(unit)
+	army_groups[group_id] = live_units
+	_select_units(live_units)
+	hud.set_hint("Group %d selected: %d unit(s)." % [group_id, live_units.size()])
+
+func _process_pending_army_command(hit: Dictionary) -> void:
+	if _pending_army_command == "move" and _is_ground_hit(hit):
+		_move_selected_to(hit.position)
+	elif _pending_army_command == "attack_move" and _is_ground_hit(hit):
+		_attack_move_selected_to(hit.position)
+	elif _pending_army_command == "attack":
+		hud.set_hint("Attack target handling comes with combat in Milestone 6.")
+		_pending_army_command = ""
+
+func _unit_matches_filter(unit: MobileUnit, filter_id: String) -> bool:
+	match filter_id:
+		"all":
+			return true
+		"infantry":
+			return unit.has_tag("infantry")
+		"rpg":
+			return unit.unit_type == "rpg_soldier" or unit.has_tag("rpg")
+		"tanks":
+			return unit.has_tag("tank")
+		_:
+			return false
+
+func _has_army_selection() -> bool:
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit is CombatUnit:
+			return true
+	return false
+
+func _combat_selection_count() -> int:
+	var count := 0
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit is CombatUnit:
+			count += 1
+	return count
+
+func _update_group_counts() -> void:
+	for group_id in army_groups.keys():
+		var live_units: Array[MobileUnit] = []
+		for unit in army_groups[group_id]:
+			if is_instance_valid(unit):
+				live_units.append(unit)
+		army_groups[group_id] = live_units
+		hud.set_group_count(group_id, live_units.size())
