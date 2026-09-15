@@ -1,6 +1,6 @@
 # Mobile RTS Prototype
 
-Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. This repository currently includes Milestone 1 and Milestone 2 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, and construction progress.
+Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. This repository currently includes Milestones 1-3 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, and automatic Resource Center harvesting.
 
 ## Requirements
 
@@ -24,6 +24,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Tap the Builder: select it.
 - Tap terrain while the Builder is selected: move it there.
 - Select the Builder, tap a building button, drag/tap a placement location, then press Confirm.
+- Build a Resource Center to deploy one Resource Truck. It automatically gathers resources and delivers +$500.
 
 ### Desktop Debug
 
@@ -33,6 +34,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Mouse wheel: zoom.
 - Drag with middle mouse: pan the camera.
 - Select Builder, click a building button, move the ghost over terrain, then Confirm.
+- Build a Resource Center to watch the Resource Truck loop between the resource field and the center.
 
 ## Project Structure
 
@@ -70,8 +72,9 @@ res://
 
 - Milestone 1: map, camera, zoom, Builder, selection, movement.
 - Milestone 2: construction placement, Power Plant, Resource Center, Barracks, War Factory, Defense Turret placeholders.
-- Milestone 3 next: Resource Center economy loop, resource vehicle, and money deliveries.
-- Later milestones: production queues, army controls, combat, AI, minimap, Android polish.
+- Milestone 3: Resource Center economy loop, Resource Truck, and +$500 deliveries.
+- Milestone 4 next: Rifleman, RPG, Tank, and production queues from Barracks and War Factory.
+- Later milestones: army controls, combat, AI, minimap, Android polish.
 
 ## Android Notes
 

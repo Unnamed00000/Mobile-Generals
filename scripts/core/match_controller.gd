@@ -2,6 +2,7 @@ class_name MatchController
 extends Node3D
 
 const BUILDER_SCENE := preload("res://scenes/units/builder.tscn")
+const RESOURCE_HARVESTER_SCENE := preload("res://scenes/units/resource_harvester.tscn")
 const BUILDING_DATA_PATHS := {
 	"power_plant": "res://data/buildings/power_plant.json",
 	"resource_center": "res://data/buildings/resource_center.json",
@@ -362,11 +363,14 @@ func _update_active_builds(delta: float) -> void:
 			building.finish_construction()
 			_apply_completed_building_stats(building)
 			active_builds.remove_at(index)
-			hud.set_hint("%s complete." % building.display_name)
+			if building.building_id != "resource_center":
+				hud.set_hint("%s complete." % building.display_name)
 
 func _apply_completed_building_stats(building: Building) -> void:
 	power_max += building.power_provided
 	power_current += building.power_required
+	if building.building_id == "resource_center":
+		_spawn_resource_harvester(building)
 	_update_match_stats()
 
 func _can_place_building(building: Building, at: Vector3) -> bool:
@@ -417,3 +421,48 @@ func _update_match_stats() -> void:
 	hud.update_match_stats(money, power_current, power_max, unit_count, unit_cap)
 	for building_id in building_data.keys():
 		hud.set_build_button_enabled(building_id, money >= int(building_data[building_id].get("price", 0)))
+
+func _spawn_resource_harvester(resource_center: Building) -> void:
+	if unit_count >= unit_cap:
+		hud.set_hint("Resource Center complete, but unit cap is full.")
+		return
+
+	var resource_point := _get_nearest_resource_point(resource_center.global_position)
+	if resource_point == null:
+		hud.set_hint("Resource Center complete, but no resource field was found.")
+		return
+
+	var harvester := RESOURCE_HARVESTER_SCENE.instantiate() as ResourceHarvester
+	harvester.name = "ResourceTruck"
+	harvester.setup(resource_center, resource_point, resource_center.team_id)
+	harvester.global_position = _harvester_spawn_position(resource_center)
+	harvester.resources_delivered.connect(Callable(self, "_on_resources_delivered"))
+	units_root.add_child(harvester)
+	unit_count += 1
+	_update_match_stats()
+	hud.set_hint("Resource Truck deployed. It will harvest automatically.")
+
+func _on_resources_delivered(amount: int) -> void:
+	money += amount
+	_update_match_stats()
+	hud.set_hint("Resource delivery +$%d." % amount)
+
+func _get_nearest_resource_point(from_position: Vector3) -> Node3D:
+	var nearest: Node3D = null
+	var nearest_distance := INF
+	for node in get_tree().get_nodes_in_group("resource_points"):
+		var point := node as Node3D
+		if point == null:
+			continue
+		var distance := from_position.distance_to(point.global_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest = point
+	return nearest
+
+func _harvester_spawn_position(resource_center: Building) -> Vector3:
+	var target := resource_center.global_position + Vector3(resource_center.footprint.x * 0.5 + 1.8, 0.45, 0.0)
+	var half_map := prototype_map.get_half_extents()
+	target.x = clampf(target.x, -half_map.x, half_map.x)
+	target.z = clampf(target.z, -half_map.y, half_map.y)
+	return target

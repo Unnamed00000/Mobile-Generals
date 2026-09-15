@@ -1,0 +1,55 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/resource_harvester.gd" id="1_harvester"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_harvester"]
+radius = 0.62
+height = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.20, 0.52, 0.64, 1)
+roughness = 0.78
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+material = SubResource("StandardMaterial3D_body")
+size = Vector3(1.6, 0.75, 2.1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cargo"]
+albedo_color = Color(0.72, 0.80, 0.84, 1)
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_cargo"]
+material = SubResource("StandardMaterial3D_cargo")
+size = Vector3(1.2, 0.55, 0.95)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_selection"]
+albedo_color = Color(0.1, 0.95, 0.32, 0.52)
+transparency = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_selection"]
+material = SubResource("StandardMaterial3D_selection")
+top_radius = 1.2
+bottom_radius = 1.2
+height = 0.035
+radial_segments = 36
+
+[node name="ResourceHarvester" type="CharacterBody3D" groups=["player_units", "selectable"]]
+collision_layer = 2
+collision_mask = 4
+script = ExtResource("1_harvester")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_harvester")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_body")
+
+[node name="Cargo" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0.2)
+mesh = SubResource("BoxMesh_cargo")
+
+[node name="SelectionRing" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 0)
+visible = false
+mesh = SubResource("CylinderMesh_selection")
+
