@@ -48,3 +48,10 @@ visible = false
 billboard = 1
 text = "Unit"
 outline_size = 6
+
+[node name="HealthLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, 0)
+visible = false
+billboard = 1
+text = "HP"
+outline_size = 6

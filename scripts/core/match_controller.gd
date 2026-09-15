@@ -18,6 +18,17 @@ const UNIT_DATA_PATHS := {
 	"rpg_soldier": "res://data/units/rpg_soldier.json",
 	"main_battle_tank": "res://data/units/main_battle_tank.json"
 }
+const ENEMY_HQ_DATA := {
+	"id": "enemy_hq",
+	"name": "Enemy HQ",
+	"price": 0,
+	"hp": 2400,
+	"build_time": 0.0,
+	"footprint": [8.0, 8.0],
+	"power_provided": 0,
+	"power_required": 0,
+	"produces": []
+}
 
 @onready var prototype_map: PrototypeMap = $PrototypeMap
 @onready var camera_controller: RtsCamera = $CameraRig
@@ -69,6 +80,7 @@ func _ready() -> void:
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
 	_spawn_builder()
 	_create_command_marker()
+	_spawn_enemy_targets()
 	_update_match_stats()
 	_update_hud_selection()
 
@@ -125,13 +137,13 @@ func _process_primary_tap(screen_position: Vector2) -> void:
 			_update_placement_from_screen(screen_position)
 		return
 
+	if _has_army_selection() and not _pending_army_command.is_empty():
+		_process_pending_army_command(hit)
+		return
+
 	var selectable := _selectable_from_collider(hit.get("collider"))
 	if selectable != null and selectable.team_id == 1:
 		_select_single(selectable)
-		return
-
-	if _has_army_selection() and not _pending_army_command.is_empty():
-		_process_pending_army_command(hit)
 		return
 
 	var building := _building_from_collider(hit.get("collider"))
@@ -205,7 +217,7 @@ func _select_units(units: Array[MobileUnit]) -> void:
 	_clear_selection()
 	selected_building = null
 	for unit in units:
-		if is_instance_valid(unit) and unit.team_id == 1:
+		if _is_live_player_unit(unit):
 			selected_units.append(unit)
 			unit.set_selected(true)
 	_update_hud_selection()
@@ -248,7 +260,17 @@ func _attack_move_selected_to(world_position: Vector3) -> void:
 			unit.attack_move_to(world_position + offsets[i])
 	_show_command_marker(world_position)
 	_pending_army_command = ""
-	hud.set_hint("Attack Move issued. Auto-targeting comes with combat in Milestone 6.")
+	hud.set_hint("Attack Move issued.")
+
+func _attack_selected_target(target: Node3D) -> void:
+	var issued := 0
+	for unit in selected_units:
+		if is_instance_valid(unit) and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
+			(unit as CombatUnit).set_attack_target(target)
+			issued += 1
+	_pending_army_command = ""
+	if issued > 0:
+		hud.set_hint("Attack order issued.")
 
 func _stop_selected_units() -> void:
 	for unit in selected_units:
@@ -279,6 +301,19 @@ func _spawn_builder() -> void:
 	builder.team_id = 1
 	builder.global_position = prototype_map.player_start
 	units_root.add_child(builder)
+
+func _spawn_enemy_targets() -> void:
+	var hq := Building.new()
+	hq.configure(ENEMY_HQ_DATA, 2)
+	hq.name = "EnemyHQ"
+	hq.global_position = prototype_map.enemy_start
+	hq.destroyed.connect(Callable(self, "_on_building_destroyed"))
+	buildings_root.add_child(hq)
+	hq.finish_construction()
+
+	_spawn_combat_unit("rifleman", 2, prototype_map.enemy_start + Vector3(-7.0, 0.45, 5.0))
+	_spawn_combat_unit("rpg_soldier", 2, prototype_map.enemy_start + Vector3(-4.0, 0.45, 8.0))
+	_spawn_combat_unit("main_battle_tank", 2, prototype_map.enemy_start + Vector3(-9.0, 0.45, 0.0))
 
 func _create_command_marker() -> void:
 	var mesh := CylinderMesh.new()
@@ -424,6 +459,7 @@ func _on_placement_confirmed() -> void:
 	_placement_preview = null
 	_placement_building_id = ""
 	building.name = "%sConstruction" % building.display_name.replace(" ", "")
+	building.destroyed.connect(Callable(self, "_on_building_destroyed"))
 	building.set_under_construction()
 
 	var build_spot := _nearest_builder_position(building.global_position, building.footprint)
@@ -525,7 +561,7 @@ func _nearest_builder_position(center: Vector3, footprint: Vector2) -> Vector3:
 	return target
 
 func _get_selected_builder() -> BuilderUnit:
-	if selected_units.size() == 1 and is_instance_valid(selected_units[0]) and selected_units[0] is BuilderUnit:
+	if selected_units.size() == 1 and is_instance_valid(selected_units[0]) and (selected_units[0] is BuilderUnit):
 		return selected_units[0] as BuilderUnit
 	return null
 
@@ -683,13 +719,9 @@ func _is_building_producing(building: Building) -> bool:
 	return false
 
 func _spawn_produced_unit(unit_id: String, building: Building) -> void:
-	var data: Dictionary = unit_data[unit_id]
-	var unit := COMBAT_UNIT_SCENE.instantiate() as CombatUnit
-	unit.name = str(data.get("name", unit_id)).replace(" ", "")
-	unit.configure(data, building.team_id)
-	unit.global_position = _unit_spawn_position(building)
-	units_root.add_child(unit)
-	hud.set_hint("%s ready." % unit.display_name)
+	var unit := _spawn_combat_unit(unit_id, building.team_id, _unit_spawn_position(building))
+	if unit != null:
+		hud.set_hint("%s ready." % unit.display_name)
 	_update_group_counts()
 
 func _unit_spawn_position(building: Building) -> Vector3:
@@ -737,6 +769,8 @@ func _on_army_filter_requested(filter_id: String, visible_only: bool) -> void:
 		var unit := node as MobileUnit
 		if unit == null or not is_instance_valid(unit) or not (unit is CombatUnit):
 			continue
+		if (unit as CombatUnit).current_hp <= 0:
+			continue
 		if visible_only and not camera_controller.get_camera().is_position_in_frustum(unit.global_position):
 			continue
 		if _unit_matches_filter(unit, filter_id):
@@ -758,14 +792,14 @@ func _on_army_command_requested(command_id: String) -> void:
 		"attack_move":
 			hud.set_hint("ATTACK MOVE: tap destination.")
 		"attack":
-			hud.set_hint("ATTACK: tap an enemy target after Milestone 6 adds enemies.")
+			hud.set_hint("ATTACK: tap an enemy unit or building.")
 
 func _on_group_saved(group_id: int) -> void:
 	if not army_groups.has(group_id):
 		return
 	var saved: Array[MobileUnit] = []
 	for unit in selected_units:
-		if is_instance_valid(unit) and unit.team_id == 1 and unit is CombatUnit:
+		if is_instance_valid(unit) and unit.team_id == 1 and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
 			saved.append(unit)
 	army_groups[group_id] = saved
 	_update_group_counts()
@@ -776,7 +810,7 @@ func _on_group_selected(group_id: int) -> void:
 		return
 	var live_units: Array[MobileUnit] = []
 	for unit in army_groups[group_id]:
-		if is_instance_valid(unit):
+		if is_instance_valid(unit) and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
 			live_units.append(unit)
 	army_groups[group_id] = live_units
 	_select_units(live_units)
@@ -788,8 +822,11 @@ func _process_pending_army_command(hit: Dictionary) -> void:
 	elif _pending_army_command == "attack_move" and _is_ground_hit(hit):
 		_attack_move_selected_to(hit.position)
 	elif _pending_army_command == "attack":
-		hud.set_hint("Attack target handling comes with combat in Milestone 6.")
-		_pending_army_command = ""
+		var target := _combat_target_from_collider(hit.get("collider"))
+		if target != null:
+			_attack_selected_target(target)
+		else:
+			hud.set_hint("Tap an enemy combat target.")
 
 func _unit_matches_filter(unit: MobileUnit, filter_id: String) -> bool:
 	match filter_id:
@@ -806,14 +843,14 @@ func _unit_matches_filter(unit: MobileUnit, filter_id: String) -> bool:
 
 func _has_army_selection() -> bool:
 	for unit in selected_units:
-		if is_instance_valid(unit) and unit is CombatUnit:
+		if is_instance_valid(unit) and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
 			return true
 	return false
 
 func _combat_selection_count() -> int:
 	var count := 0
 	for unit in selected_units:
-		if is_instance_valid(unit) and unit is CombatUnit:
+		if is_instance_valid(unit) and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
 			count += 1
 	return count
 
@@ -821,7 +858,55 @@ func _update_group_counts() -> void:
 	for group_id in army_groups.keys():
 		var live_units: Array[MobileUnit] = []
 		for unit in army_groups[group_id]:
-			if is_instance_valid(unit):
+			if is_instance_valid(unit) and (unit is CombatUnit) and (unit as CombatUnit).current_hp > 0:
 				live_units.append(unit)
 		army_groups[group_id] = live_units
 		hud.set_group_count(group_id, live_units.size())
+
+func _combat_target_from_collider(collider: Object) -> Node3D:
+	var unit := _selectable_from_collider(collider)
+	if unit != null and unit.team_id != 1 and (unit is CombatUnit):
+		return unit
+	var building := _building_from_collider(collider)
+	if building != null and building.team_id != 1 and building.is_complete:
+		return building
+	return null
+
+func _spawn_combat_unit(unit_id: String, team_id: int, at: Vector3) -> CombatUnit:
+	if not unit_data.has(unit_id):
+		push_warning("Missing unit data for combat spawn: %s" % unit_id)
+		return null
+	var data: Dictionary = unit_data[unit_id]
+	var unit := COMBAT_UNIT_SCENE.instantiate() as CombatUnit
+	unit.name = str(data.get("name", unit_id)).replace(" ", "")
+	unit.configure(data, team_id)
+	unit.global_position = at
+	unit.destroyed.connect(Callable(self, "_on_combat_unit_destroyed"))
+	units_root.add_child(unit)
+	return unit
+
+func _on_combat_unit_destroyed(unit: CombatUnit) -> void:
+	if unit.team_id == 1:
+		unit_count = max(0, unit_count - unit.unit_cap_cost)
+		_update_match_stats()
+	selected_units.erase(unit)
+	for group_id in army_groups.keys():
+		var group_units: Array = army_groups[group_id]
+		group_units.erase(unit)
+		army_groups[group_id] = group_units
+	_update_group_counts()
+	if selected_units.is_empty():
+		_update_hud_selection()
+
+func _on_building_destroyed(building: Building) -> void:
+	if building.team_id == 2:
+		hud.set_hint("%s destroyed." % building.display_name)
+	else:
+		hud.set_hint("%s lost." % building.display_name)
+
+func _is_live_player_unit(unit: MobileUnit) -> bool:
+	if not is_instance_valid(unit) or unit.team_id != 1:
+		return false
+	if unit is CombatUnit:
+		return (unit as CombatUnit).current_hp > 0
+	return true

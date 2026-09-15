@@ -114,8 +114,11 @@ func show_army_controls(count: int) -> void:
 	if is_instance_valid(_production_panel):
 		_production_panel.visible = false
 	if is_instance_valid(_army_panel):
-		_army_panel.visible = true
-	_set_hint("Army selected: %d. Use commands or quick filters." % count)
+		_army_panel.visible = count > 0
+	if count > 0:
+		_set_hint("Army selected: %d. Use commands or quick filters." % count)
+	else:
+		_set_default_hint()
 
 func set_hint(message: String) -> void:
 	_set_hint(message)

@@ -1,6 +1,8 @@
 class_name Building
 extends StaticBody3D
 
+signal destroyed(building: Building)
+
 @export var building_id := ""
 @export var display_name := "Building"
 @export var team_id := 1
@@ -18,10 +20,12 @@ var construction_progress := 0.0
 var production_queue: Array[String] = []
 var current_production_id := ""
 var production_progress := 0.0
+var current_hp := 1000
 
 var _body_mesh: MeshInstance3D
 var _progress_label: Label3D
 var _production_label: Label3D
+var _health_label: Label3D
 var _ready_material: StandardMaterial3D
 var _valid_preview_material: StandardMaterial3D
 var _invalid_preview_material: StandardMaterial3D
@@ -29,6 +33,7 @@ var _construction_material: StandardMaterial3D
 
 func _ready() -> void:
 	add_to_group("buildings")
+	add_to_group("combat_targets")
 	if team_id == 1:
 		add_to_group("player_buildings")
 	else:
@@ -41,6 +46,7 @@ func configure(data: Dictionary, new_team_id: int) -> void:
 	price = int(data.get("price", price))
 	build_time = float(data.get("build_time", build_time))
 	max_hp = int(data.get("hp", max_hp))
+	current_hp = max_hp
 	power_provided = int(data.get("power_provided", power_provided))
 	power_required = int(data.get("power_required", power_required))
 	produces.clear()
@@ -81,11 +87,22 @@ func set_construction_progress(value: float) -> void:
 func finish_construction() -> void:
 	is_complete = true
 	construction_progress = 1.0
+	current_hp = max_hp
 	if is_instance_valid(_body_mesh):
 		_body_mesh.material_override = _ready_material
 	if is_instance_valid(_progress_label):
 		_progress_label.text = display_name
 		_progress_label.visible = true
+	_update_health_display()
+
+func take_damage(amount: int, _source: Node = null) -> void:
+	if is_preview or not is_complete:
+		return
+	current_hp = max(0, current_hp - max(1, amount))
+	_update_health_display()
+	if current_hp <= 0:
+		destroyed.emit(self)
+		queue_free()
 
 func set_production_display(unit_name: String, progress: float, queued_count: int) -> void:
 	current_production_id = unit_name
@@ -140,6 +157,15 @@ func _build_placeholder_model() -> void:
 	_production_label.visible = false
 	add_child(_production_label)
 
+	_health_label = Label3D.new()
+	_health_label.name = "HealthLabel"
+	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_health_label.position = Vector3(0.0, mesh.size.y + 2.15, 0.0)
+	_health_label.modulate = Color(0.70, 1.0, 0.72)
+	_health_label.outline_size = 8
+	_health_label.visible = false
+	add_child(_health_label)
+
 func _make_material(color: Color, alpha: float) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(color.r, color.g, color.b, alpha)
@@ -175,5 +201,23 @@ func _color_for_building() -> Color:
 			return Color(0.30, 0.33, 0.37)
 		"defense_turret":
 			return Color(0.44, 0.45, 0.42)
+		"enemy_hq":
+			return Color(0.56, 0.18, 0.16)
 		_:
 			return Color(0.35, 0.39, 0.44)
+
+func _update_health_display() -> void:
+	if not is_instance_valid(_health_label):
+		return
+	if current_hp >= max_hp:
+		_health_label.visible = false
+		return
+	var percent := float(current_hp) / maxf(float(max_hp), 1.0)
+	_health_label.visible = true
+	_health_label.text = "HP %d/%d" % [current_hp, max_hp]
+	if percent > 0.55:
+		_health_label.modulate = Color(0.70, 1.0, 0.72)
+	elif percent > 0.25:
+		_health_label.modulate = Color(1.0, 0.88, 0.34)
+	else:
+		_health_label.modulate = Color(1.0, 0.32, 0.28)

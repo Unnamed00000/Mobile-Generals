@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the in-project working title stays `Mobile RTS Prototype` to keep the game identity original.
 
-This repository currently includes Milestones 1-5 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, and mobile command buttons.
+This repository currently includes Milestones 1-6 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, mobile command buttons, enemy targets, combat, damage, and destruction.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Build a Resource Center to deploy one Resource Truck. It automatically gathers resources and delivers +$500.
 - Select Barracks to produce Rifleman/RPG Soldier. Select War Factory to produce a Tank.
 - Use All/Infantry/RPG/Tanks filters to select combat units. Long-press group 1-4 to save, tap 1-4 to recall.
-- Use Move, Attack Move, and Stop from the army panel. Attack is reserved for Milestone 6 enemies/combat.
+- Use Move, Attack Move, Attack, and Stop from the army panel. Enemy units and an Enemy HQ are placed across the map.
 
 ### Desktop Debug
 
@@ -82,8 +82,9 @@ res://
 - Milestone 3: Resource Center economy loop, Resource Truck, and +$500 deliveries.
 - Milestone 4: Rifleman, RPG Soldier, Main Battle Tank, and production queues from Barracks and War Factory.
 - Milestone 5: mobile army selection categories, groups 1-4, Move, Attack placeholder, Attack Move, Stop.
-- Milestone 6 next: enemies, combat, damage, destruction, and automatic attack behavior.
-- Later milestones: AI, minimap, Android polish.
+- Milestone 6: enemies, combat, damage, destruction, and automatic attack behavior.
+- Milestone 7 next: simple AI attacks, victory, and defeat flow.
+- Later milestones: minimap, Android polish.
 
 ## Android Notes
 
