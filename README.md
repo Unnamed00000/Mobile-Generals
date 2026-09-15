@@ -1,6 +1,8 @@
 # Mobile RTS Prototype
 
-Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. This repository currently includes Milestones 1-3 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, and automatic Resource Center harvesting.
+Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the in-project working title stays `Mobile RTS Prototype` to keep the game identity original.
+
+This repository currently includes Milestones 1-3 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, and automatic Resource Center harvesting.
 
 ## Requirements
 
