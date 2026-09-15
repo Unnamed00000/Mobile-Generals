@@ -4,6 +4,9 @@ extends Node3D
 @export var map_half_extents := Vector2(60.0, 40.0)
 @export var pan_speed := 0.035
 @export var mouse_pan_speed := 0.08
+@export var edge_pan_speed := 30.0
+@export var keyboard_pan_speed := 34.0
+@export var edge_pan_margin := 28.0
 @export var min_zoom := 18.0
 @export var max_zoom := 48.0
 @export var zoom_step := 2.5
@@ -19,6 +22,14 @@ func _ready() -> void:
 	position = Vector3(-28.0, 0.0, 18.0)
 	camera.position = Vector3(0.0, 0.0, 34.0)
 	_clamp_to_map()
+
+func _process(delta: float) -> void:
+	var keyboard_direction: Vector2 = _keyboard_pan_direction()
+	var edge_direction: Vector2 = _edge_pan_direction()
+	if keyboard_direction.length_squared() > 0.0:
+		_pan_by_screen_direction(keyboard_direction.normalized(), keyboard_pan_speed * delta)
+	if edge_direction.length_squared() > 0.0:
+		_pan_by_screen_direction(edge_direction.normalized(), edge_pan_speed * delta)
 
 func get_camera() -> Camera3D:
 	return camera
@@ -70,13 +81,18 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 		_zoom_by(zoom_step)
 
 func _pan_by_pixels(pixel_delta: Vector2, speed: float) -> void:
-	var zoom_factor := camera.position.z / max_zoom
-	var right := global_transform.basis.x
-	var forward := -global_transform.basis.z
+	var zoom_factor: float = camera.position.z / max_zoom
+	_pan_world((-pixel_delta.x) * speed * maxf(0.45, zoom_factor), (-pixel_delta.y) * speed * maxf(0.45, zoom_factor))
+
+func _pan_by_screen_direction(screen_direction: Vector2, distance: float) -> void:
+	_pan_world(screen_direction.x * distance, screen_direction.y * distance)
+
+func _pan_world(right_amount: float, forward_amount: float) -> void:
+	var right: Vector3 = global_transform.basis.x
+	var forward: Vector3 = -global_transform.basis.z
 	forward.y = 0.0
 	forward = forward.normalized()
-
-	position += ((-right * pixel_delta.x) + (-forward * pixel_delta.y)) * speed * max(0.45, zoom_factor)
+	position += (right * right_amount) + (forward * forward_amount)
 	_clamp_to_map()
 
 func _zoom_by(amount: float) -> void:
@@ -86,3 +102,32 @@ func _clamp_to_map() -> void:
 	position.x = clampf(position.x, -map_half_extents.x, map_half_extents.x)
 	position.z = clampf(position.z, -map_half_extents.y, map_half_extents.y)
 
+func _keyboard_pan_direction() -> Vector2:
+	var direction: Vector2 = Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		direction.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		direction.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		direction.y += 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		direction.y -= 1.0
+	return direction
+
+func _edge_pan_direction() -> Vector2:
+	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
+	var viewport_size: Vector2 = viewport_rect.size
+	var mouse_position: Vector2 = get_viewport().get_mouse_position()
+	var direction: Vector2 = Vector2.ZERO
+
+	if mouse_position.x <= edge_pan_margin:
+		direction.x -= 1.0
+	elif mouse_position.x >= viewport_size.x - edge_pan_margin:
+		direction.x += 1.0
+
+	if mouse_position.y <= edge_pan_margin:
+		direction.y += 1.0
+	elif mouse_position.y >= viewport_size.y - edge_pan_margin:
+		direction.y -= 1.0
+
+	return direction
