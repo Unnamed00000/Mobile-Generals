@@ -667,7 +667,7 @@ func _on_production_cancel_requested() -> void:
 
 	var data: Dictionary = unit_data[cancelled_unit_id]
 	money += int(data.get("price", 0))
-	unit_count = max(0, unit_count - int(data.get("unit_cap_cost", 1)))
+	unit_count = maxi(0, unit_count - int(data.get("unit_cap_cost", 1)))
 	hud.set_hint("Cancelled %s." % str(data.get("name", cancelled_unit_id)))
 	_start_next_production_if_idle(selected_building)
 	_update_match_stats()
@@ -705,7 +705,7 @@ func _update_active_productions(delta: float) -> void:
 func _start_next_production_if_idle(building: Building) -> void:
 	if _is_building_producing(building) or building.production_queue.is_empty():
 		return
-	var unit_id := building.production_queue.pop_front()
+	var unit_id: String = str(building.production_queue.pop_front())
 	active_productions.append({
 		"building": building,
 		"unit_id": unit_id,
@@ -887,7 +887,7 @@ func _spawn_combat_unit(unit_id: String, team_id: int, at: Vector3) -> CombatUni
 
 func _on_combat_unit_destroyed(unit: CombatUnit) -> void:
 	if unit.team_id == 1:
-		unit_count = max(0, unit_count - unit.unit_cap_cost)
+		unit_count = maxi(0, unit_count - unit.unit_cap_cost)
 		_update_match_stats()
 	selected_units.erase(unit)
 	for group_id in army_groups.keys():

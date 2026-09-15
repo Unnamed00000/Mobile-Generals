@@ -78,8 +78,8 @@ func stop() -> void:
 	super.stop()
 
 func take_damage(amount: int, _source: Node = null) -> void:
-	var final_damage := max(1, amount - armor)
-	current_hp = max(0, current_hp - final_damage)
+	var final_damage: int = maxi(1, amount - armor)
+	current_hp = maxi(0, current_hp - final_damage)
 	_update_health_display()
 	if current_hp <= 0:
 		destroyed.emit(self)
@@ -154,7 +154,7 @@ func _accent_position() -> Vector3:
 		_:
 			return Vector3(0.0, 1.0, -0.25)
 
-func _update_attack_order(delta: float) -> void:
+func _update_attack_order(_delta: float) -> void:
 	var target_position := attack_target.global_position
 	var distance := global_position.distance_to(target_position)
 	if distance > attack_range:
@@ -162,7 +162,7 @@ func _update_attack_order(delta: float) -> void:
 		destination.y = global_position.y
 		has_move_order = true
 		command_mode = "attack"
-		super(delta)
+		_follow_attack_target()
 		return
 
 	has_move_order = false
@@ -174,6 +174,21 @@ func _update_attack_order(delta: float) -> void:
 	if _fire_cooldown <= 0.0:
 		_apply_damage_to_target()
 		_fire_cooldown = 1.0 / maxf(fire_rate, 0.05)
+
+func _follow_attack_target() -> void:
+	var offset := destination - global_position
+	offset.y = 0.0
+	var distance := offset.length()
+	if distance <= stopping_distance:
+		has_move_order = false
+		velocity = Vector3.ZERO
+		move_and_slide()
+		return
+
+	var direction := offset.normalized()
+	velocity = direction * move_speed
+	move_and_slide()
+	_look_towards(direction)
 
 func _apply_damage_to_target() -> void:
 	if attack_target == null:

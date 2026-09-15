@@ -98,7 +98,7 @@ func finish_construction() -> void:
 func take_damage(amount: int, _source: Node = null) -> void:
 	if is_preview or not is_complete:
 		return
-	current_hp = max(0, current_hp - max(1, amount))
+	current_hp = maxi(0, current_hp - maxi(1, amount))
 	_update_health_display()
 	if current_hp <= 0:
 		destroyed.emit(self)
