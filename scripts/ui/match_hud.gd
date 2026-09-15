@@ -1,6 +1,8 @@
 class_name MatchHud
 extends CanvasLayer
 
+const MINIMAP_PANEL_SCRIPT := preload("res://scripts/ui/minimap_panel.gd")
+
 signal build_requested(building_id: String)
 signal placement_confirmed
 signal placement_cancelled
@@ -10,6 +12,7 @@ signal army_filter_requested(filter_id: String, visible_only: bool)
 signal army_command_requested(command_id: String)
 signal group_selected(group_id: int)
 signal group_saved(group_id: int)
+signal minimap_pressed(world_position: Vector3)
 
 var money := 10000
 var power_current := 0
@@ -29,6 +32,7 @@ var _production_panel: HBoxContainer
 var _production_status: Label
 var _army_panel: HBoxContainer
 var _army_visible_toggle: CheckButton
+var _minimap: MinimapPanel
 var _result_panel: PanelContainer
 var _result_title: Label
 var _result_detail: Label
@@ -141,6 +145,14 @@ func set_group_count(group_id: int, count: int) -> void:
 		var button := _group_buttons[group_id] as Button
 		button.text = "%d\n%d" % [group_id, count]
 
+func setup_minimap(map_size: Vector2) -> void:
+	if is_instance_valid(_minimap):
+		_minimap.set_map_size(map_size)
+
+func update_minimap(blips: Array[Dictionary], camera_center: Vector3) -> void:
+	if is_instance_valid(_minimap):
+		_minimap.set_blips(blips, camera_center)
+
 func show_match_result(title: String, detail: String) -> void:
 	if is_instance_valid(_builder_panel):
 		_builder_panel.visible = false
@@ -185,6 +197,20 @@ func _build_ui() -> void:
 	_top_bar.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_top_bar.add_theme_font_size_override("font_size", 24)
 	top_panel.add_child(_top_bar)
+
+	_minimap = MINIMAP_PANEL_SCRIPT.new() as MinimapPanel
+	_minimap.name = "Minimap"
+	_minimap.anchor_left = 1.0
+	_minimap.anchor_top = 0.0
+	_minimap.anchor_right = 1.0
+	_minimap.anchor_bottom = 0.0
+	_minimap.offset_left = -276.0
+	_minimap.offset_top = safe_margin
+	_minimap.offset_right = -safe_margin
+	_minimap.offset_bottom = safe_margin + 164.0
+	_minimap.map_pressed.connect(Callable(self, "_on_minimap_pressed"))
+	root.add_child(_minimap)
+	_interactive_controls.append(_minimap)
 
 	var bottom_panel := PanelContainer.new()
 	bottom_panel.name = "BottomPanel"
@@ -403,6 +429,9 @@ func _on_group_button_up(group_id: int) -> void:
 		group_saved.emit(group_id)
 	else:
 		group_selected.emit(group_id)
+
+func _on_minimap_pressed(world_position: Vector3) -> void:
+	minimap_pressed.emit(world_position)
 
 func _set_default_hint() -> void:
 	_set_hint("Tap Builder to select. Tap terrain to move. Pinch to zoom.")

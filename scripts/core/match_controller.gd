@@ -94,13 +94,16 @@ func _ready() -> void:
 	hud.army_command_requested.connect(Callable(self, "_on_army_command_requested"))
 	hud.group_selected.connect(Callable(self, "_on_group_selected"))
 	hud.group_saved.connect(Callable(self, "_on_group_saved"))
+	hud.minimap_pressed.connect(Callable(self, "_on_minimap_pressed"))
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
+	hud.setup_minimap(prototype_map.map_size)
 	_spawn_player_hq()
 	_spawn_builder()
 	_create_command_marker()
 	_spawn_enemy_targets()
 	_update_match_stats()
 	_update_hud_selection()
+	_update_minimap()
 
 func _physics_process(delta: float) -> void:
 	if _match_over:
@@ -108,6 +111,7 @@ func _physics_process(delta: float) -> void:
 	_update_active_builds(delta)
 	_update_active_productions(delta)
 	_update_enemy_ai(delta)
+	_update_minimap()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _match_over:
@@ -431,6 +435,48 @@ func _check_match_end_conditions() -> void:
 		return
 	if not _has_surviving_player_assets():
 		_end_match(false, "Defeat", "All player combat assets are lost.")
+
+func _update_minimap() -> void:
+	var blips: Array[Dictionary] = []
+	for node in get_tree().get_nodes_in_group("player_buildings"):
+		var building := node as Building
+		if building == null or not is_instance_valid(building) or building.current_hp <= 0:
+			continue
+		var radius: float = 4.0 if building.is_complete else 3.0
+		blips.append(_make_minimap_blip(building.global_position, Color(0.18, 0.68, 1.0, 0.95), radius))
+
+	for node in get_tree().get_nodes_in_group("enemy_buildings"):
+		var building := node as Building
+		if building == null or not is_instance_valid(building) or building.current_hp <= 0:
+			continue
+		blips.append(_make_minimap_blip(building.global_position, Color(1.0, 0.25, 0.18, 0.96), 4.2))
+
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var unit := node as MobileUnit
+		if unit == null or not is_instance_valid(unit):
+			continue
+		if unit is CombatUnit and (unit as CombatUnit).current_hp <= 0:
+			continue
+		blips.append(_make_minimap_blip(unit.global_position, Color(0.35, 0.95, 0.38, 0.95), 2.6))
+
+	for node in get_tree().get_nodes_in_group("enemy_units"):
+		var unit := node as CombatUnit
+		if unit == null or not is_instance_valid(unit) or unit.current_hp <= 0:
+			continue
+		blips.append(_make_minimap_blip(unit.global_position, Color(1.0, 0.38, 0.22, 0.95), 2.8))
+
+	hud.update_minimap(blips, camera_controller.position)
+
+func _make_minimap_blip(world_position: Vector3, color: Color, radius: float) -> Dictionary:
+	return {
+		"position": world_position,
+		"color": color,
+		"radius": radius
+	}
+
+func _on_minimap_pressed(world_position: Vector3) -> void:
+	camera_controller.center_on(world_position)
+	hud.set_hint("Camera moved on minimap.")
 
 func _has_surviving_player_assets() -> bool:
 	if is_instance_valid(_player_hq) and _player_hq.current_hp > 0:

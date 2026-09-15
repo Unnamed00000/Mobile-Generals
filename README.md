@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the in-project working title stays `Mobile RTS Prototype` to keep the game identity original.
 
-This repository currently includes Milestones 1-7 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, a starting Mobile HQ, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, mobile command buttons, enemy targets, combat, damage, destruction, simple enemy attack waves, victory, and defeat.
+This repository currently includes Milestones 1-8 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, a starting Mobile HQ, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, mobile command buttons, enemy targets, combat, damage, destruction, simple enemy attack waves, victory, defeat, and a tappable minimap.
 
 ## Requirements
 
@@ -35,6 +35,7 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 
 - Drag one finger on free terrain: pan the RTS camera.
 - Pinch with two fingers: zoom in and out.
+- Tap the minimap: move the camera to that map area.
 - Tap the Builder: select it.
 - Tap terrain while the Builder is selected: move it there.
 - Select the Builder, tap a building button, drag/tap a placement location, then press Confirm.
@@ -51,6 +52,7 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 - Right click ground: move selected units.
 - Mouse wheel: zoom.
 - Drag with middle mouse: pan the camera.
+- Click the minimap: move the camera to that map area.
 - Select Builder, click a building button, move the ghost over terrain, then Confirm.
 - Build a Resource Center to watch the Resource Truck loop between the resource field and the center.
 - Select Barracks or War Factory, then click unit buttons to fill the production queue.
@@ -98,7 +100,8 @@ res://
 - Milestone 5: mobile army selection categories, groups 1-4, Move, Attack placeholder, Attack Move, Stop.
 - Milestone 6: enemies, combat, damage, destruction, and automatic attack behavior.
 - Milestone 7: starting Mobile HQ, simple AI attack waves, victory, and defeat flow.
-- Milestone 8 next: minimap and Android polish.
+- Milestone 8: tappable minimap with player/enemy blips and camera frame.
+- Milestone 9 next: Android polish, touch selection improvements, and APK build automation.
 
 ## Android Notes
 
