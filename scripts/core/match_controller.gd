@@ -18,6 +18,17 @@ const UNIT_DATA_PATHS := {
 	"rpg_soldier": "res://data/units/rpg_soldier.json",
 	"main_battle_tank": "res://data/units/main_battle_tank.json"
 }
+const PLAYER_HQ_DATA := {
+	"id": "player_hq",
+	"name": "Mobile HQ",
+	"price": 0,
+	"hp": 2600,
+	"build_time": 0.0,
+	"footprint": [8.0, 8.0],
+	"power_provided": 8,
+	"power_required": 0,
+	"produces": []
+}
 const ENEMY_HQ_DATA := {
 	"id": "enemy_hq",
 	"name": "Enemy HQ",
@@ -64,6 +75,12 @@ var _placement_building_id := ""
 var _placement_position := Vector3.ZERO
 var _placement_valid := false
 var _pending_army_command := ""
+var _player_hq: Building
+var _enemy_hq: Building
+var _match_over := false
+var _ai_attack_timer := 9.0
+var _ai_wave_index := 0
+var _ai_attack_interval := 24.0
 
 func _ready() -> void:
 	_load_building_data()
@@ -78,6 +95,7 @@ func _ready() -> void:
 	hud.group_selected.connect(Callable(self, "_on_group_selected"))
 	hud.group_saved.connect(Callable(self, "_on_group_saved"))
 	camera_controller.set_map_half_extents(prototype_map.get_half_extents())
+	_spawn_player_hq()
 	_spawn_builder()
 	_create_command_marker()
 	_spawn_enemy_targets()
@@ -85,10 +103,15 @@ func _ready() -> void:
 	_update_hud_selection()
 
 func _physics_process(delta: float) -> void:
+	if _match_over:
+		return
 	_update_active_builds(delta)
 	_update_active_productions(delta)
+	_update_enemy_ai(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _match_over:
+		return
 	if event is InputEventScreenTouch:
 		_handle_touch(event)
 	elif event is InputEventScreenDrag and event.index == 0:
@@ -285,7 +308,7 @@ func _formation_offsets(count: int) -> Array[Vector3]:
 		offsets.append(Vector3.ZERO)
 		return offsets
 
-	var columns := ceili(sqrt(float(count)))
+	var columns: int = ceili(sqrt(float(count)))
 	var spacing := 1.8
 	for index in count:
 		var row := index / columns
@@ -294,6 +317,16 @@ func _formation_offsets(count: int) -> Array[Vector3]:
 		var centered_z := float(row) * spacing
 		offsets.append(Vector3(centered_x, 0.0, centered_z))
 	return offsets
+
+func _spawn_player_hq() -> void:
+	_player_hq = Building.new()
+	_player_hq.configure(PLAYER_HQ_DATA, 1)
+	_player_hq.name = "PlayerMobileHQ"
+	_player_hq.global_position = prototype_map.player_start + Vector3(-8.0, -0.45, -2.0)
+	_player_hq.destroyed.connect(Callable(self, "_on_building_destroyed"))
+	buildings_root.add_child(_player_hq)
+	_player_hq.finish_construction()
+	_apply_completed_building_stats(_player_hq)
 
 func _spawn_builder() -> void:
 	var builder := BUILDER_SCENE.instantiate() as BuilderUnit
@@ -310,10 +343,124 @@ func _spawn_enemy_targets() -> void:
 	hq.destroyed.connect(Callable(self, "_on_building_destroyed"))
 	buildings_root.add_child(hq)
 	hq.finish_construction()
+	_enemy_hq = hq
 
 	_spawn_combat_unit("rifleman", 2, prototype_map.enemy_start + Vector3(-7.0, 0.45, 5.0))
 	_spawn_combat_unit("rpg_soldier", 2, prototype_map.enemy_start + Vector3(-4.0, 0.45, 8.0))
 	_spawn_combat_unit("main_battle_tank", 2, prototype_map.enemy_start + Vector3(-9.0, 0.45, 0.0))
+
+func _update_enemy_ai(delta: float) -> void:
+	_ai_attack_timer = maxf(0.0, _ai_attack_timer - delta)
+	if _ai_attack_timer > 0.0:
+		return
+
+	_ai_attack_timer = _ai_attack_interval
+	if _ai_wave_index % 2 == 1:
+		_spawn_enemy_reinforcement_wave()
+	_send_enemy_attack_wave()
+	_ai_wave_index += 1
+
+func _send_enemy_attack_wave() -> void:
+	var target: Node3D = _best_enemy_ai_target()
+	if target == null:
+		_check_match_end_conditions()
+		return
+
+	var attackers: Array[CombatUnit] = []
+	for node in get_tree().get_nodes_in_group("enemy_units"):
+		var unit := node as CombatUnit
+		if unit != null and is_instance_valid(unit) and unit.current_hp > 0:
+			attackers.append(unit)
+
+	if attackers.is_empty():
+		_spawn_enemy_reinforcement_wave()
+		for node in get_tree().get_nodes_in_group("enemy_units"):
+			var unit := node as CombatUnit
+			if unit != null and is_instance_valid(unit) and unit.current_hp > 0:
+				attackers.append(unit)
+
+	for unit in attackers:
+		unit.set_attack_target(target)
+
+	if not attackers.is_empty():
+		hud.set_hint("Enemy attack wave incoming.")
+
+func _spawn_enemy_reinforcement_wave() -> void:
+	var wave_units: Array[String] = ["rifleman", "rifleman", "rpg_soldier"]
+	if _ai_wave_index >= 2:
+		wave_units.append("main_battle_tank")
+
+	for index in wave_units.size():
+		var unit_id: String = wave_units[index]
+		var offset := Vector3(float(index) * 1.8 - 2.7, 0.45, 7.0 + float(index % 2) * 2.0)
+		_spawn_combat_unit(unit_id, 2, prototype_map.enemy_start + offset)
+
+func _best_enemy_ai_target() -> Node3D:
+	var origin: Vector3 = prototype_map.enemy_start
+	var nearest: Node3D = null
+	var nearest_distance: float = INF
+
+	for node in get_tree().get_nodes_in_group("player_buildings"):
+		var building := node as Building
+		if building == null or not is_instance_valid(building) or not building.is_complete or building.current_hp <= 0:
+			continue
+		var distance := origin.distance_to(building.global_position)
+		if distance < nearest_distance:
+			nearest = building
+			nearest_distance = distance
+
+	if nearest != null:
+		return nearest
+
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var unit := node as CombatUnit
+		if unit == null or not is_instance_valid(unit) or unit.current_hp <= 0:
+			continue
+		var distance := origin.distance_to(unit.global_position)
+		if distance < nearest_distance:
+			nearest = unit
+			nearest_distance = distance
+
+	return nearest
+
+func _check_match_end_conditions() -> void:
+	if _match_over:
+		return
+	if not is_instance_valid(_enemy_hq) or _enemy_hq.current_hp <= 0:
+		_end_match(true, "Victory", "Enemy HQ destroyed. Mission complete.")
+		return
+	if not _has_surviving_player_assets():
+		_end_match(false, "Defeat", "All player combat assets are lost.")
+
+func _has_surviving_player_assets() -> bool:
+	if is_instance_valid(_player_hq) and _player_hq.current_hp > 0:
+		return true
+
+	for node in get_tree().get_nodes_in_group("player_buildings"):
+		var building := node as Building
+		if building != null and is_instance_valid(building) and building.is_complete and building.current_hp > 0:
+			return true
+
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var unit := node as CombatUnit
+		if unit != null and is_instance_valid(unit) and unit.current_hp > 0:
+			return true
+
+	return false
+
+func _end_match(_victory: bool, title: String, detail: String) -> void:
+	_match_over = true
+	_pending_army_command = ""
+	_clear_selection()
+	for node in get_tree().get_nodes_in_group("selectable"):
+		var player_unit := node as MobileUnit
+		if player_unit != null and is_instance_valid(player_unit):
+			player_unit.stop()
+	for node in get_tree().get_nodes_in_group("enemy_units"):
+		var enemy_unit := node as MobileUnit
+		if enemy_unit != null and is_instance_valid(enemy_unit):
+			enemy_unit.stop()
+	hud.show_match_result(title, detail)
 
 func _create_command_marker() -> void:
 	var mesh := CylinderMesh.new()
@@ -602,7 +749,7 @@ func _on_resources_delivered(amount: int) -> void:
 
 func _get_nearest_resource_point(from_position: Vector3) -> Node3D:
 	var nearest: Node3D = null
-	var nearest_distance := INF
+	var nearest_distance: float = INF
 	for node in get_tree().get_nodes_in_group("resource_points"):
 		var point := node as Node3D
 		if point == null:
@@ -897,12 +1044,14 @@ func _on_combat_unit_destroyed(unit: CombatUnit) -> void:
 	_update_group_counts()
 	if selected_units.is_empty():
 		_update_hud_selection()
+	_check_match_end_conditions()
 
 func _on_building_destroyed(building: Building) -> void:
 	if building.team_id == 2:
 		hud.set_hint("%s destroyed." % building.display_name)
 	else:
 		hud.set_hint("%s lost." % building.display_name)
+	_check_match_end_conditions()
 
 func _is_live_player_unit(unit: MobileUnit) -> bool:
 	if not is_instance_valid(unit) or unit.team_id != 1:

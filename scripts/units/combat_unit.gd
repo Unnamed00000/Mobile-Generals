@@ -206,7 +206,7 @@ func _flash_attack() -> void:
 
 func _find_nearest_enemy_target() -> Node3D:
 	var nearest: Node3D = null
-	var nearest_distance := INF
+	var nearest_distance: float = INF
 	for node in get_tree().get_nodes_in_group("combat_targets"):
 		var target := node as Node3D
 		if not _is_enemy_target(target):

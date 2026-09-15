@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the in-project working title stays `Mobile RTS Prototype` to keep the game identity original.
 
-This repository currently includes Milestones 1-6 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, mobile command buttons, enemy targets, combat, damage, and destruction.
+This repository currently includes Milestones 1-7 basics: a playable match scene with a test map, angled RTS camera, touch/mouse camera controls, one Builder unit, a starting Mobile HQ, selection, movement commands, building placement, construction progress, automatic Resource Center harvesting, unit production, army filters, control groups, mobile command buttons, enemy targets, combat, damage, destruction, simple enemy attack waves, victory, and defeat.
 
 ## Requirements
 
@@ -30,6 +30,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Select Barracks to produce Rifleman/RPG Soldier. Select War Factory to produce a Tank.
 - Use All/Infantry/RPG/Tanks filters to select combat units. Long-press group 1-4 to save, tap 1-4 to recall.
 - Use Move, Attack Move, Attack, and Stop from the army panel. Enemy units and an Enemy HQ are placed across the map.
+- Defend the Mobile HQ from periodic enemy attack waves. Destroy the Enemy HQ to win.
 
 ### Desktop Debug
 
@@ -42,6 +43,7 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 - Build a Resource Center to watch the Resource Truck loop between the resource field and the center.
 - Select Barracks or War Factory, then click unit buttons to fill the production queue.
 - Use Ctrl+1 through Ctrl+4 to save selected combat units into groups. Press 1 through 4 to recall.
+- Enemy units periodically attack player buildings and combat units. Destroy the Enemy HQ to trigger victory.
 
 ## Project Structure
 
@@ -83,8 +85,8 @@ res://
 - Milestone 4: Rifleman, RPG Soldier, Main Battle Tank, and production queues from Barracks and War Factory.
 - Milestone 5: mobile army selection categories, groups 1-4, Move, Attack placeholder, Attack Move, Stop.
 - Milestone 6: enemies, combat, damage, destruction, and automatic attack behavior.
-- Milestone 7 next: simple AI attacks, victory, and defeat flow.
-- Later milestones: minimap, Android polish.
+- Milestone 7: starting Mobile HQ, simple AI attack waves, victory, and defeat flow.
+- Milestone 8 next: minimap and Android polish.
 
 ## Android Notes
 

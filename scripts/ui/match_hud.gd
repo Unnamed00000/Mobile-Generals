@@ -29,6 +29,9 @@ var _production_panel: HBoxContainer
 var _production_status: Label
 var _army_panel: HBoxContainer
 var _army_visible_toggle: CheckButton
+var _result_panel: PanelContainer
+var _result_title: Label
+var _result_detail: Label
 var _interactive_controls: Array[Control] = []
 var _building_buttons: Dictionary = {}
 var _unit_buttons: Dictionary = {}
@@ -137,6 +140,23 @@ func set_group_count(group_id: int, count: int) -> void:
 	if _group_buttons.has(group_id):
 		var button := _group_buttons[group_id] as Button
 		button.text = "%d\n%d" % [group_id, count]
+
+func show_match_result(title: String, detail: String) -> void:
+	if is_instance_valid(_builder_panel):
+		_builder_panel.visible = false
+	if is_instance_valid(_placement_panel):
+		_placement_panel.visible = false
+	if is_instance_valid(_production_panel):
+		_production_panel.visible = false
+	if is_instance_valid(_army_panel):
+		_army_panel.visible = false
+	if is_instance_valid(_result_title):
+		_result_title.text = title
+	if is_instance_valid(_result_detail):
+		_result_detail.text = detail
+	if is_instance_valid(_result_panel):
+		_result_panel.visible = true
+	_set_hint(detail)
 
 func is_screen_position_over_ui(screen_position: Vector2) -> bool:
 	for control in _interactive_controls:
@@ -283,6 +303,38 @@ func _build_ui() -> void:
 	_add_army_command_button("Attack\nMove", "attack_move")
 	_add_army_command_button("Attack", "attack")
 	_add_army_command_button("Stop", "stop")
+
+	_result_panel = PanelContainer.new()
+	_result_panel.name = "ResultPanel"
+	_result_panel.anchor_left = 0.5
+	_result_panel.anchor_top = 0.5
+	_result_panel.anchor_right = 0.5
+	_result_panel.anchor_bottom = 0.5
+	_result_panel.offset_left = -260.0
+	_result_panel.offset_top = -96.0
+	_result_panel.offset_right = 260.0
+	_result_panel.offset_bottom = 96.0
+	_result_panel.visible = false
+	root.add_child(_result_panel)
+	_interactive_controls.append(_result_panel)
+
+	var result_box := VBoxContainer.new()
+	result_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	result_box.add_theme_constant_override("separation", 12)
+	_result_panel.add_child(result_box)
+
+	_result_title = Label.new()
+	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_title.add_theme_font_size_override("font_size", 42)
+	result_box.add_child(_result_title)
+
+	_result_detail = Label.new()
+	_result_detail.custom_minimum_size = Vector2(440.0, 48.0)
+	_result_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_result_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_result_detail.add_theme_font_size_override("font_size", 22)
+	result_box.add_child(_result_detail)
 
 func _format_money(value: int) -> String:
 	var raw := str(value)
