@@ -1,22 +1,5 @@
-# Godot 4
 .godot/
-*.translation
-
-# Imported asset output
-*.import
-
-# Export artifacts
-export_presets.cfg
-*.apk
-*.aab
-*.ipa
-*.exe
-*.app
-*.zip
-
-# OS/editor noise
-.DS_Store
-Thumbs.db
-*.tmp
-*.log
-
+build/
+exports/
+.import/
+export_credentials.cfg

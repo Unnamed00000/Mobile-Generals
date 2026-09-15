@@ -17,6 +17,18 @@ No paid SDKs or paid services are required. Online multiplayer is intentionally 
 2. Open `res://scenes/match/match.tscn`.
 3. Press Play. The project main scene already points at the match scene.
 
+## Phone Preview
+
+Every push to `main` builds a Godot Web preview with GitHub Actions and publishes it through GitHub Pages.
+
+Preview URL:
+
+```text
+https://unnamed00000.github.io/Mobile-Generals/
+```
+
+Open that URL on a phone after the `Web Preview` action finishes. On the first setup, GitHub may require Pages to be enabled with `Settings -> Pages -> Source -> GitHub Actions`.
+
 ## Current Controls
 
 ### Android / Touch
