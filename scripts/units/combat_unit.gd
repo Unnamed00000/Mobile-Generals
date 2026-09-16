@@ -65,6 +65,10 @@ func set_attack_target(target: Node3D) -> void:
 	attack_target = target
 	command_mode = "attack"
 
+func set_selected(value: bool) -> void:
+	super.set_selected(value)
+	_update_health_display()
+
 func attack_move_to(world_position: Vector3) -> void:
 	attack_target = null
 	super.attack_move_to(world_position)
@@ -231,12 +235,12 @@ func _is_enemy_target(target: Node3D) -> bool:
 	return false
 
 func _should_auto_acquire() -> bool:
-	return command_mode == "attack_move" or command_mode == "idle" or command_mode == "move"
+	return command_mode == "attack_move" or command_mode == "idle"
 
 func _update_health_display() -> void:
 	if not is_instance_valid(health_label):
 		return
-	if current_hp >= hp:
+	if current_hp >= hp and not is_selected:
 		health_label.visible = false
 		return
 	var percent := float(current_hp) / maxf(float(hp), 1.0)

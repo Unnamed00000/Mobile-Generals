@@ -8,6 +8,7 @@ signal command_completed(unit: MobileUnit)
 @export var team_id := 1
 @export var move_speed := 7.0
 @export var stopping_distance := 0.45
+@export var separation_radius := 1.15
 @export var unit_tags: Array[String] = []
 
 @onready var selection_ring: MeshInstance3D = $SelectionRing
@@ -42,7 +43,7 @@ func _physics_process(_delta: float) -> void:
 		command_completed.emit(self)
 		return
 
-	var direction := offset.normalized()
+	var direction := _movement_direction(offset.normalized())
 	velocity = direction * move_speed
 	move_and_slide()
 	_look_towards(direction)
@@ -77,3 +78,20 @@ func _look_towards(direction: Vector3) -> void:
 		return
 	var target_basis := Basis.looking_at(direction, Vector3.UP)
 	basis = basis.slerp(target_basis, 0.22)
+
+func _movement_direction(base_direction: Vector3) -> Vector3:
+	var separation := Vector3.ZERO
+	for node in get_tree().get_nodes_in_group("selectable"):
+		var other := node as MobileUnit
+		if other == null or other == self or not is_instance_valid(other):
+			continue
+		var away := global_position - other.global_position
+		away.y = 0.0
+		var distance := away.length()
+		if distance > 0.01 and distance < separation_radius:
+			separation += away.normalized() * ((separation_radius - distance) / separation_radius)
+
+	var direction := base_direction + separation * 0.55
+	if direction.length_squared() <= 0.001:
+		return base_direction
+	return direction.normalized()

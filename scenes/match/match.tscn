@@ -1,9 +1,9 @@
 [gd_scene load_steps=8 format=3]
 
-[ext_resource type="Script" path="res://scripts/core/match_controller.gd" id="1_match"]
+[ext_resource type="Script" path="res://scripts/core/infantry_stage_controller.gd" id="1_match"]
 [ext_resource type="Script" path="res://scripts/maps/prototype_map.gd" id="2_map"]
 [ext_resource type="Script" path="res://scripts/camera/rts_camera.gd" id="3_camera"]
-[ext_resource type="Script" path="res://scripts/ui/match_hud.gd" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/ui/stage_one_hud.gd" id="4_hud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_match"]
 sky_top_color = Color(0.52, 0.67, 0.79, 1)
