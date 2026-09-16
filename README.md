@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the active in-project prototype focuses only on the infantry command feel.
 
-The active match scene now keeps the infantry command prototype and adds a small base-building loop: one battlefield, RTS camera, 6 player Riflemen, 1 Worker, 1 HQ, 4 enemy Riflemen, tap selection, SELECT drag multi-selection, formation movement, attack, health, death, victory, defeat, worker construction, HQ worker training, and simple Resource Center income.
+The active match scene now keeps the infantry command prototype and adds a small base-building loop: one battlefield, RTS camera, 6 player Riflemen with low-poly soldier silhouettes, 1 low-poly Worker, 1 HQ, 4 enemy Riflemen, tap selection, SELECT drag multi-selection, formation movement, attack, health, death, victory, defeat, worker construction, HQ worker training, and simple Resource Center income.
 
 Older production, minimap, and vehicle-era files remain in the repository for later stages, but tanks, cars, aircraft, multiplayer, Firebase, and large tech systems are not active in the current match scene.
 

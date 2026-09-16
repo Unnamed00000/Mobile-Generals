@@ -94,22 +94,42 @@ func _apply_placeholder_visual() -> void:
 		unit_label.text = display_name
 		unit_label.visible = true
 
-	var body_material := StandardMaterial3D.new()
-	body_material.albedo_color = _body_color()
-	body_material.roughness = 0.78
-
-	var accent_material := StandardMaterial3D.new()
-	accent_material.albedo_color = _accent_color()
-	accent_material.roughness = 0.72
+	var uniform_material := _make_unit_material(_body_color())
+	var gear_material := _make_unit_material(_accent_color())
+	var skin_material := _make_unit_material(Color(0.68, 0.52, 0.40) if team_id == 1 else Color(0.58, 0.42, 0.34))
+	var boot_material := _make_unit_material(Color(0.07, 0.08, 0.08))
+	var weapon_material := _make_unit_material(Color(0.08, 0.09, 0.10))
 
 	if is_instance_valid(body_mesh):
-		body_mesh.material_override = body_material
-		body_mesh.scale = _body_scale()
+		var body := CapsuleMesh.new()
+		body.radius = 0.28
+		body.height = 1.15
+		body.radial_segments = 10
+		body.rings = 3
+		body_mesh.mesh = body
+		body_mesh.position = Vector3(0.0, 0.62, 0.0)
+		body_mesh.scale = Vector3.ONE
+		body_mesh.material_override = uniform_material
 
 	if is_instance_valid(accent_mesh):
-		accent_mesh.material_override = accent_material
-		accent_mesh.scale = _accent_scale()
-		accent_mesh.position = _accent_position()
+		var rifle := CylinderMesh.new()
+		rifle.top_radius = 0.055
+		rifle.bottom_radius = 0.055
+		rifle.height = 1.05
+		rifle.radial_segments = 8
+		accent_mesh.mesh = rifle
+		accent_mesh.position = Vector3(0.28, 0.92, -0.35)
+		accent_mesh.rotation_degrees = Vector3(88.0, 0.0, 10.0)
+		accent_mesh.scale = Vector3.ONE
+		accent_mesh.material_override = weapon_material
+
+	_add_visual_part("Head", _make_sphere_mesh(0.20), skin_material, Vector3(0.0, 1.35, 0.0))
+	_add_visual_part("Helmet", _make_cylinder_mesh(0.22, 0.14), gear_material, Vector3(0.0, 1.54, 0.0))
+	_add_visual_part("Backpack", _make_box_mesh(Vector3(0.38, 0.48, 0.20)), gear_material, Vector3(0.0, 0.78, 0.34))
+	_add_visual_part("LeftArm", _make_cylinder_mesh(0.055, 0.58), uniform_material, Vector3(-0.34, 0.82, -0.02), Vector3(18.0, 0.0, -16.0))
+	_add_visual_part("RightArm", _make_cylinder_mesh(0.055, 0.58), uniform_material, Vector3(0.34, 0.82, -0.08), Vector3(72.0, 0.0, 24.0))
+	_add_visual_part("LeftLeg", _make_cylinder_mesh(0.065, 0.58), boot_material, Vector3(-0.13, 0.10, 0.0))
+	_add_visual_part("RightLeg", _make_cylinder_mesh(0.065, 0.58), boot_material, Vector3(0.13, 0.10, 0.0))
 
 func _body_color() -> Color:
 	if team_id != 1:
@@ -158,6 +178,43 @@ func _accent_position() -> Vector3:
 		_:
 			return Vector3(0.0, 1.0, -0.25)
 
+func _make_unit_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.82
+	return material
+
+func _make_sphere_mesh(radius: float) -> SphereMesh:
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 12
+	mesh.rings = 6
+	return mesh
+
+func _make_cylinder_mesh(radius: float, height: float) -> CylinderMesh:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
+	mesh.radial_segments = 8
+	return mesh
+
+func _make_box_mesh(size: Vector3) -> BoxMesh:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	return mesh
+
+func _add_visual_part(label: String, mesh: Mesh, material: Material, local_position: Vector3, rotation: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.name = label
+	part.mesh = mesh
+	part.material_override = material
+	part.position = local_position
+	part.rotation_degrees = rotation
+	add_child(part)
+	return part
+
 func _update_attack_order(_delta: float) -> void:
 	var target_position := attack_target.global_position
 	var distance := global_position.distance_to(target_position)
@@ -205,8 +262,8 @@ func _flash_attack() -> void:
 	if not is_instance_valid(accent_mesh):
 		return
 	var tween := create_tween()
-	accent_mesh.scale = _accent_scale() * 1.25
-	tween.tween_property(accent_mesh, "scale", _accent_scale(), 0.12)
+	accent_mesh.scale = Vector3.ONE * 1.18
+	tween.tween_property(accent_mesh, "scale", Vector3.ONE, 0.12)
 
 func _find_nearest_enemy_target() -> Node3D:
 	var nearest: Node3D = null
