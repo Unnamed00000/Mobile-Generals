@@ -88,6 +88,8 @@ func take_damage(amount: int, _source: Node = null) -> void:
 	if current_hp <= 0:
 		destroyed.emit(self)
 		queue_free()
+		return
+	_retaliate_against(_source)
 
 func _apply_placeholder_visual() -> void:
 	if is_instance_valid(unit_label):
@@ -256,6 +258,7 @@ func _apply_damage_to_target() -> void:
 		return
 	if attack_target.has_method("take_damage"):
 		attack_target.call("take_damage", damage, self)
+		_spawn_shot_trace(_target_aim_position(attack_target))
 	_flash_attack()
 
 func _flash_attack() -> void:
@@ -264,6 +267,47 @@ func _flash_attack() -> void:
 	var tween := create_tween()
 	accent_mesh.scale = Vector3.ONE * 1.18
 	tween.tween_property(accent_mesh, "scale", Vector3.ONE, 0.12)
+
+func _retaliate_against(source: Node) -> void:
+	var source_target := source as Node3D
+	if source_target == null or not is_instance_valid(source_target):
+		return
+	if not _is_enemy_target(source_target):
+		return
+	attack_target = source_target
+	command_mode = "attack"
+	_scan_timer = 0.0
+
+func _spawn_shot_trace(target_position: Vector3) -> void:
+	var start_position := global_position + Vector3(0.0, 1.05, 0.0)
+	if is_instance_valid(accent_mesh):
+		start_position = accent_mesh.global_position
+
+	var mesh := ImmediateMesh.new()
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	mesh.surface_add_vertex(start_position)
+	mesh.surface_add_vertex(target_position)
+	mesh.surface_end()
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 0.82, 0.22, 0.95)
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.62, 0.12)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	var trace := MeshInstance3D.new()
+	trace.name = "ShotTrace"
+	trace.mesh = mesh
+	trace.material_override = material
+	get_tree().current_scene.add_child(trace)
+	get_tree().create_timer(0.08).timeout.connect(Callable(trace, "queue_free"))
+
+func _target_aim_position(target: Node3D) -> Vector3:
+	if target is CombatUnit:
+		return target.global_position + Vector3(0.0, 1.05, 0.0)
+	if target is Building:
+		return target.global_position + Vector3(0.0, 1.4, 0.0)
+	return target.global_position
 
 func _find_nearest_enemy_target() -> Node3D:
 	var nearest: Node3D = null

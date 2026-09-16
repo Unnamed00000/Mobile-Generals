@@ -44,7 +44,7 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 - Tap the HQ: train another Worker.
 - Tap SELECT, drag over friendly units, then release: multi-select.
 - Tap terrain with selected units: move there.
-- Tap an enemy Rifleman with selected Riflemen: attack.
+- Tap an enemy Rifleman with selected Riflemen: attack. The enemy returns fire, and both sides show shot traces and HP loss.
 - Eliminate all enemy Riflemen to win.
 
 ### Desktop Debug
