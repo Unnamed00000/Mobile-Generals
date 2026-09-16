@@ -78,6 +78,7 @@ var _selection_current := Vector2.ZERO
 var _selection_dragging := false
 var _primary_touch_start := Vector2.ZERO
 var _primary_touch_dragged := false
+var _pending_command := ""
 var _match_over := false
 
 func _ready() -> void:
@@ -87,6 +88,11 @@ func _ready() -> void:
 	hud.worker_build_requested.connect(Callable(self, "_on_worker_build_requested"))
 	hud.hq_worker_requested.connect(Callable(self, "_on_hq_worker_requested"))
 	hud.placement_cancel_requested.connect(Callable(self, "_cancel_placement"))
+	hud.add_nearest_soldier_requested.connect(Callable(self, "_on_add_nearest_soldier_requested"))
+	hud.select_all_soldiers_requested.connect(Callable(self, "_on_select_all_soldiers_requested"))
+	hud.move_command_requested.connect(Callable(self, "_on_move_command_requested"))
+	hud.attack_command_requested.connect(Callable(self, "_on_attack_command_requested"))
+	hud.stop_command_requested.connect(Callable(self, "_on_stop_command_requested"))
 	_spawn_starting_hq()
 	_spawn_stage_units()
 	_update_hud()
@@ -225,6 +231,7 @@ func _process_tap(screen_position: Vector2) -> void:
 	var unit := _selectable_from_collider(hit.get("collider"))
 	if unit != null:
 		if unit.team_id == 1:
+			_pending_command = ""
 			var single_selection: Array[MobileUnit] = [unit]
 			_select_units(single_selection)
 		elif not selected_units.is_empty() and unit is CombatUnit:
@@ -233,11 +240,15 @@ func _process_tap(screen_position: Vector2) -> void:
 
 	var building := _building_from_collider(hit.get("collider"))
 	if building != null and building.team_id == 1:
+		_pending_command = ""
 		_select_building(building)
 		return
 
 	if _is_ground_hit(hit) and not selected_units.is_empty():
-		_move_selected_to(hit.position)
+		if _pending_command == "attack":
+			hud.set_hint("ATTACK: tap an enemy soldier.")
+		else:
+			_move_selected_to(hit.position)
 
 func _begin_selection_drag(screen_position: Vector2) -> void:
 	_selection_start = screen_position
@@ -292,11 +303,13 @@ func _select_units(units: Array[MobileUnit]) -> void:
 			hud.set_hint("Worker selected. Tap ground to move.")
 			hud.show_worker_context()
 		else:
-			hud.set_hint("Rifleman selected. Tap ground to move or enemy to attack.")
-			hud.show_default_context()
+			hud.show_soldier_context(_selected_combat_count())
 	else:
-		hud.set_hint("%d units selected." % selected_units.size())
-		hud.show_default_context()
+		if _selected_combat_count() > 0:
+			hud.show_soldier_context(_selected_combat_count())
+		else:
+			hud.set_hint("%d units selected." % selected_units.size())
+			hud.show_default_context()
 
 func _select_building(building: Building) -> void:
 	for unit in selected_units:
@@ -317,6 +330,7 @@ func _move_selected_to(world_position: Vector3) -> void:
 		var unit := selected_units[index]
 		if is_instance_valid(unit):
 			unit.move_to(world_position + offsets[index])
+	_pending_command = ""
 	hud.set_hint("Move order issued.")
 
 func _attack_selected(target: CombatUnit) -> void:
@@ -326,9 +340,100 @@ func _attack_selected(target: CombatUnit) -> void:
 			(unit as CombatUnit).set_attack_target(target)
 			issued += 1
 	if issued > 0:
+		_pending_command = ""
 		hud.set_hint("Attack order issued.")
 	else:
 		hud.set_hint("Workers cannot attack.")
+
+func _on_add_nearest_soldier_requested() -> void:
+	var nearest := _nearest_unselected_visible_soldier()
+	if nearest == null:
+		hud.set_hint("No more visible soldiers to add.")
+		return
+	var new_selection: Array[MobileUnit] = []
+	for unit in selected_units:
+		if is_instance_valid(unit) and _is_selectable_alive(unit):
+			new_selection.append(unit)
+	new_selection.append(nearest)
+	_select_units(new_selection)
+	hud.set_hint("%d soldiers selected." % _selected_combat_count())
+
+func _on_select_all_soldiers_requested() -> void:
+	var soldiers := _visible_player_soldiers()
+	if soldiers.is_empty():
+		hud.set_hint("No visible soldiers.")
+		return
+	var new_selection: Array[MobileUnit] = []
+	for soldier in soldiers:
+		new_selection.append(soldier)
+	_select_units(new_selection)
+	hud.set_hint("All visible soldiers selected: %d." % soldiers.size())
+
+func _on_move_command_requested() -> void:
+	if _selected_combat_count() <= 0:
+		hud.set_hint("Select soldiers first.")
+		return
+	_pending_command = "move"
+	hud.set_hint("MOVE: tap terrain to send selected soldiers.")
+
+func _on_attack_command_requested() -> void:
+	if _selected_combat_count() <= 0:
+		hud.set_hint("Select soldiers first.")
+		return
+	_pending_command = "attack"
+	hud.set_hint("ATTACK: tap an enemy soldier.")
+
+func _on_stop_command_requested() -> void:
+	var stopped := 0
+	for unit in selected_units:
+		if is_instance_valid(unit):
+			unit.stop()
+			stopped += 1
+	_pending_command = ""
+	hud.set_hint("Stopped %d selected units." % stopped)
+
+func _selected_combat_count() -> int:
+	var count := 0
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit is CombatUnit and (unit as CombatUnit).current_hp > 0:
+			count += 1
+	return count
+
+func _nearest_unselected_visible_soldier() -> CombatUnit:
+	var soldiers := _visible_player_soldiers()
+	var origin := _selection_center()
+	var nearest: CombatUnit = null
+	var nearest_distance := INF
+	for soldier in soldiers:
+		if selected_units.has(soldier):
+			continue
+		var distance := soldier.global_position.distance_to(origin)
+		if distance < nearest_distance:
+			nearest = soldier
+			nearest_distance = distance
+	return nearest
+
+func _visible_player_soldiers() -> Array[CombatUnit]:
+	var camera := camera_controller.get_camera()
+	var soldiers: Array[CombatUnit] = []
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var soldier := node as CombatUnit
+		if soldier == null or not is_instance_valid(soldier) or soldier.current_hp <= 0:
+			continue
+		if camera.is_position_in_frustum(soldier.global_position):
+			soldiers.append(soldier)
+	return soldiers
+
+func _selection_center() -> Vector3:
+	var total := Vector3.ZERO
+	var count := 0
+	for unit in selected_units:
+		if is_instance_valid(unit) and _is_selectable_alive(unit):
+			total += unit.global_position
+			count += 1
+	if count <= 0:
+		return camera_controller.position
+	return total / float(count)
 
 func _formation_offsets(count: int) -> Array[Vector3]:
 	var offsets: Array[Vector3] = []

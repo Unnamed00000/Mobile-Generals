@@ -38,6 +38,7 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 - Drag one finger on free terrain: pull the battlefield directly under your finger.
 - Pinch with two fingers: zoom in and out.
 - Tap one friendly Rifleman: select him.
+- With soldiers selected, use the permanent footer controls: `+1` adds the nearest visible soldier, `ALL` selects all visible soldiers, `MOVE` makes the next terrain tap a move order, `ATTACK` makes the next enemy tap an attack order, and `STOP` cancels orders.
 - Tap the Worker: select him. The Worker can move, build, but cannot attack.
 - With the Worker selected: build Resource Center, Power Plant, Barracks, or Defense Post.
 - Place the Resource Center near the resource crates. A completed Resource Center adds money deliveries over time.

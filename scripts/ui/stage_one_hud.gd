@@ -5,6 +5,11 @@ signal select_mode_requested
 signal worker_build_requested(building_id: String)
 signal hq_worker_requested
 signal placement_cancel_requested
+signal add_nearest_soldier_requested
+signal select_all_soldiers_requested
+signal move_command_requested
+signal attack_command_requested
+signal stop_command_requested
 
 var _top_bar: Label
 var _hint_label: Label
@@ -55,6 +60,15 @@ func show_worker_context() -> void:
 func show_hq_context() -> void:
 	_clear_context_panel()
 	_add_context_button("Worker\n$500", "_on_hq_worker_pressed")
+
+func show_soldier_context(count: int) -> void:
+	_clear_context_panel()
+	_add_context_button("+1", "_on_add_nearest_soldier_pressed")
+	_add_context_button("ALL", "_on_select_all_soldiers_pressed")
+	_add_context_button("MOVE", "_on_move_command_pressed")
+	_add_context_button("ATTACK", "_on_attack_command_pressed")
+	_add_context_button("STOP", "_on_stop_command_pressed")
+	set_hint("%d selected. Add soldiers, then choose MOVE or ATTACK." % count)
 
 func show_building_context(label: String) -> void:
 	_clear_context_panel()
@@ -121,18 +135,18 @@ func _build_ui() -> void:
 
 	var bottom_row := HBoxContainer.new()
 	bottom_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom_row.add_theme_constant_override("separation", 10)
+	bottom_row.add_theme_constant_override("separation", 6)
 	bottom_panel.add_child(bottom_row)
 
 	_selected_label = Label.new()
-	_selected_label.custom_minimum_size = Vector2(132.0, 56.0)
+	_selected_label.custom_minimum_size = Vector2(106.0, 56.0)
 	_selected_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_selected_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_selected_label.add_theme_font_size_override("font_size", 22)
 	bottom_row.add_child(_selected_label)
 
 	_hint_label = Label.new()
-	_hint_label.custom_minimum_size = Vector2(360.0, 56.0)
+	_hint_label.custom_minimum_size = Vector2(200.0, 56.0)
 	_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -142,7 +156,7 @@ func _build_ui() -> void:
 	_select_button = Button.new()
 	_select_button.text = "SELECT"
 	_select_button.toggle_mode = true
-	_select_button.custom_minimum_size = Vector2(112.0, 58.0)
+	_select_button.custom_minimum_size = Vector2(88.0, 58.0)
 	_select_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_select_button.add_theme_font_size_override("font_size", 20)
 	_select_button.add_theme_stylebox_override("normal", _make_button_style(Color(0.08, 0.16, 0.22, 0.92)))
@@ -175,6 +189,21 @@ func _on_hq_worker_pressed() -> void:
 func _on_cancel_placement_pressed() -> void:
 	placement_cancel_requested.emit()
 
+func _on_add_nearest_soldier_pressed() -> void:
+	add_nearest_soldier_requested.emit()
+
+func _on_select_all_soldiers_pressed() -> void:
+	select_all_soldiers_requested.emit()
+
+func _on_move_command_pressed() -> void:
+	move_command_requested.emit()
+
+func _on_attack_command_pressed() -> void:
+	attack_command_requested.emit()
+
+func _on_stop_command_pressed() -> void:
+	stop_command_requested.emit()
+
 func _clear_context_panel() -> void:
 	if not is_instance_valid(_context_panel):
 		return
@@ -184,9 +213,9 @@ func _clear_context_panel() -> void:
 func _add_context_button(label: String, method_name: String, bind_value: String = "") -> void:
 	var button := Button.new()
 	button.text = label
-	button.custom_minimum_size = Vector2(104.0, 58.0)
+	button.custom_minimum_size = Vector2(82.0, 58.0)
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
-	button.add_theme_font_size_override("font_size", 17)
+	button.add_theme_font_size_override("font_size", 14)
 	button.add_theme_stylebox_override("normal", _make_button_style(Color(0.08, 0.16, 0.22, 0.92)))
 	button.add_theme_stylebox_override("hover", _make_button_style(Color(0.10, 0.24, 0.34, 0.96)))
 	button.add_theme_stylebox_override("pressed", _make_button_style(Color(0.06, 0.38, 0.68, 0.96)))
