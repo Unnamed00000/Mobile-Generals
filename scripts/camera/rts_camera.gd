@@ -2,8 +2,6 @@ class_name RtsCamera
 extends Node3D
 
 @export var map_half_extents := Vector2(60.0, 40.0)
-@export var touch_pan_speed := 0.055
-@export var two_finger_pan_multiplier := 0.6
 @export var pinch_zoom_speed := 0.065
 @export var mouse_pan_speed := 0.08
 @export var edge_pan_speed := 30.0
@@ -19,6 +17,10 @@ extends Node3D
 var _touch_points: Dictionary = {}
 var _last_pinch_distance := 0.0
 var _last_pinch_center := Vector2.ZERO
+var _single_touch_anchor_world := Vector3.ZERO
+var _single_touch_has_anchor := false
+var _pinch_anchor_world := Vector3.ZERO
+var _pinch_has_anchor := false
 var _middle_mouse_panning := false
 
 func _ready() -> void:
@@ -62,26 +64,54 @@ func _unhandled_input(event: InputEvent) -> void:
 func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed:
 		_touch_points[event.index] = event.position
+		if _touch_points.size() == 1:
+			var anchor: Variant = _screen_to_ground(event.position)
+			_single_touch_has_anchor = anchor != null
+			if _single_touch_has_anchor:
+				_single_touch_anchor_world = anchor as Vector3
+			_pinch_has_anchor = false
+		elif _touch_points.size() == 2:
+			_prepare_pinch_anchor()
 	else:
 		_touch_points.erase(event.index)
 		_last_pinch_distance = 0.0
 		_last_pinch_center = Vector2.ZERO
+		_single_touch_has_anchor = false
+		_pinch_has_anchor = false
+		if _touch_points.size() == 1:
+			var remaining_points: Array = _touch_points.values()
+			var anchor: Variant = _screen_to_ground(remaining_points[0])
+			_single_touch_has_anchor = anchor != null
+			if _single_touch_has_anchor:
+				_single_touch_anchor_world = anchor as Vector3
 
 func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	_touch_points[event.index] = event.position
 
 	if _touch_points.size() == 1:
-		_pan_by_pixels(event.relative, touch_pan_speed)
+		if not _single_touch_has_anchor:
+			var anchor: Variant = _screen_to_ground(event.position)
+			_single_touch_has_anchor = anchor != null
+			if _single_touch_has_anchor:
+				_single_touch_anchor_world = anchor as Vector3
+		if not _single_touch_has_anchor:
+			return
+		_pan_to_keep_screen_anchor(event.position, _single_touch_anchor_world)
 	elif _touch_points.size() == 2:
 		var points: Array = _touch_points.values()
 		var first_point: Vector2 = points[0]
 		var second_point: Vector2 = points[1]
 		var current_distance: float = first_point.distance_to(second_point)
 		var current_center: Vector2 = (first_point + second_point) * 0.5
+		if not _pinch_has_anchor:
+			var anchor: Variant = _screen_to_ground(current_center)
+			_pinch_has_anchor = anchor != null
+			if _pinch_has_anchor:
+				_pinch_anchor_world = anchor as Vector3
 		if _last_pinch_distance > 0.0:
 			_zoom_by((_last_pinch_distance - current_distance) * pinch_zoom_speed)
-		if _last_pinch_center != Vector2.ZERO:
-			_pan_by_pixels(current_center - _last_pinch_center, touch_pan_speed * two_finger_pan_multiplier)
+		if _pinch_has_anchor:
+			_pan_to_keep_screen_anchor(current_center, _pinch_anchor_world)
 		_last_pinch_distance = current_distance
 		_last_pinch_center = current_center
 
@@ -96,6 +126,37 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 func _pan_by_pixels(pixel_delta: Vector2, speed: float) -> void:
 	var zoom_factor: float = camera.position.z / max_zoom
 	_pan_world((-pixel_delta.x) * speed * maxf(0.45, zoom_factor), (-pixel_delta.y) * speed * maxf(0.45, zoom_factor))
+
+func _pan_to_keep_screen_anchor(screen_position: Vector2, anchor_world: Vector3) -> void:
+	var current_world: Variant = _screen_to_ground(screen_position)
+	if current_world == null:
+		return
+	var delta := anchor_world - (current_world as Vector3)
+	position.x += delta.x
+	position.z += delta.z
+	_clamp_to_map()
+
+func _prepare_pinch_anchor() -> void:
+	var points: Array = _touch_points.values()
+	if points.size() < 2:
+		return
+	_last_pinch_distance = (points[0] as Vector2).distance_to(points[1] as Vector2)
+	_last_pinch_center = ((points[0] as Vector2) + (points[1] as Vector2)) * 0.5
+	var anchor: Variant = _screen_to_ground(_last_pinch_center)
+	_pinch_has_anchor = anchor != null
+	if _pinch_has_anchor:
+		_pinch_anchor_world = anchor as Vector3
+
+func _screen_to_ground(screen_position: Vector2) -> Variant:
+	var ray_origin := camera.project_ray_origin(screen_position)
+	var ray_direction := camera.project_ray_normal(screen_position)
+	if absf(ray_direction.y) <= 0.001:
+		return null
+	var distance := -ray_origin.y / ray_direction.y
+	if distance < 0.0:
+		return null
+	var hit := ray_origin + ray_direction * distance
+	return Vector3(hit.x, 0.0, hit.z)
 
 func _pan_by_screen_direction(screen_direction: Vector2, distance: float) -> void:
 	_pan_world(screen_direction.x * distance, screen_direction.y * distance)

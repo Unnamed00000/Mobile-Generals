@@ -35,7 +35,7 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 
 ### Android / Touch
 
-- Drag one finger on free terrain: pan the RTS camera.
+- Drag one finger on free terrain: pull the battlefield directly under your finger.
 - Pinch with two fingers: zoom in and out.
 - Tap one friendly Rifleman: select him.
 - Tap the Worker: select him. The Worker can move, build, but cannot attack.
