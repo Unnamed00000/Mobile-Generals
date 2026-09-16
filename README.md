@@ -2,7 +2,7 @@
 
 Prototype 0.1 for an original mobile RTS inspired by classic real-time strategy pacing. The GitHub repository is currently named `Mobile-Generals`, while the active in-project prototype focuses only on the infantry command feel.
 
-The active match scene is now limited to First Development Stage only: one battlefield, RTS camera, 6 player Riflemen, 4 enemy Riflemen, tap selection, SELECT drag multi-selection, formation movement, attack, health, death, victory, and defeat.
+The active match scene is now limited to First Development Stage only: one battlefield, RTS camera, 6 player Riflemen, 1 Worker, 4 enemy Riflemen, tap selection, SELECT drag multi-selection, formation movement, attack, health, death, victory, and defeat.
 
 Older base-building, economy, production, minimap, and vehicle-era files remain in the repository for later stages, but they are not active in the current match scene.
 
@@ -38,8 +38,9 @@ Open that URL on a phone after the `Web Preview` action finishes. On the first s
 - Drag one finger on free terrain: pan the RTS camera.
 - Pinch with two fingers: zoom in and out.
 - Tap one friendly Rifleman: select him.
-- Tap SELECT, drag over friendly Riflemen, then release: multi-select.
-- Tap terrain with selected Riflemen: move there.
+- Tap the Worker: select him. The Worker can move but cannot attack yet.
+- Tap SELECT, drag over friendly units, then release: multi-select.
+- Tap terrain with selected units: move there.
 - Tap an enemy Rifleman with selected Riflemen: attack.
 - Eliminate all enemy Riflemen to win.
 
@@ -86,7 +87,7 @@ res://
 
 ## Milestone Status
 
-- Stage 1 active: landscape battlefield, camera drag/pinch, 6 Riflemen, 4 enemy Riflemen, selection, drag multi-selection, movement, attack, health, and death.
+- Stage 1 active: landscape battlefield, camera drag/pinch, 6 Riflemen, 1 Worker, 4 enemy Riflemen, selection, drag multi-selection, movement, attack, health, and death.
 - Stage 2 next, only after Stage 1 feels good: HQ, Builder, Barracks, and construction.
 - Stage 3 later: Resource Center, resource point, collectors, and money.
 - Stage 4 later: MG, RPG, Sniper, production queue, quick filters, and groups 1-4.

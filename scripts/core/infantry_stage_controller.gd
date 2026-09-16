@@ -2,6 +2,7 @@ class_name InfantryStageController
 extends Node3D
 
 const COMBAT_UNIT_SCENE := preload("res://scenes/units/combat_unit.tscn")
+const WORKER_SCENE := preload("res://scenes/units/worker.tscn")
 const RIFLEMAN_DATA_PATH := "res://data/units/rifleman.json"
 
 @onready var prototype_map: PrototypeMap = $PrototypeMap
@@ -9,7 +10,7 @@ const RIFLEMAN_DATA_PATH := "res://data/units/rifleman.json"
 @onready var units_root: Node3D = $Units
 @onready var hud: StageOneHud = $MatchHUD
 
-var selected_units: Array[CombatUnit] = []
+var selected_units: Array[MobileUnit] = []
 
 var _rifleman_data: Dictionary = {}
 var _match_seconds := 0.0
@@ -64,6 +65,7 @@ func _spawn_stage_units() -> void:
 
 	for index in player_positions.size():
 		_spawn_rifleman(1, player_positions[index], "Rifleman%02d" % index)
+	_spawn_worker(prototype_map.player_start + Vector3(-4.8, 0.0, 0.6))
 	for index in enemy_positions.size():
 		_spawn_rifleman(2, enemy_positions[index], "EnemyRifleman%02d" % index)
 
@@ -75,6 +77,14 @@ func _spawn_rifleman(team_id: int, world_position: Vector3, unit_name: String) -
 	unit.destroyed.connect(Callable(self, "_on_unit_destroyed"))
 	units_root.add_child(unit)
 	return unit
+
+func _spawn_worker(world_position: Vector3) -> WorkerUnit:
+	var worker := WORKER_SCENE.instantiate() as WorkerUnit
+	worker.name = "PlayerWorker"
+	worker.team_id = 1
+	worker.global_position = world_position
+	units_root.add_child(worker)
+	return worker
 
 func _handle_touch(event: InputEventScreenTouch) -> void:
 	if hud.is_screen_position_over_ui(event.position):
@@ -126,13 +136,13 @@ func _process_tap(screen_position: Vector2) -> void:
 	if hit.is_empty():
 		return
 
-	var unit := _unit_from_collider(hit.get("collider"))
+	var unit := _selectable_from_collider(hit.get("collider"))
 	if unit != null:
 		if unit.team_id == 1:
-			var single_selection: Array[CombatUnit] = [unit]
+			var single_selection: Array[MobileUnit] = [unit]
 			_select_units(single_selection)
-		elif not selected_units.is_empty():
-			_attack_selected(unit)
+		elif not selected_units.is_empty() and unit is CombatUnit:
+			_attack_selected(unit as CombatUnit)
 		return
 
 	if _is_ground_hit(hit) and not selected_units.is_empty():
@@ -157,34 +167,40 @@ func _finish_selection_drag(screen_position: Vector2) -> void:
 	_select_mode = false
 	hud.set_select_mode(false)
 
-func _units_in_screen_rect(selection_rect: Rect2) -> Array[CombatUnit]:
+func _units_in_screen_rect(selection_rect: Rect2) -> Array[MobileUnit]:
 	var camera := camera_controller.get_camera()
-	var units: Array[CombatUnit] = []
+	var units: Array[MobileUnit] = []
 	for node in get_tree().get_nodes_in_group("player_units"):
-		var unit := node as CombatUnit
-		if unit == null or not is_instance_valid(unit) or unit.current_hp <= 0:
+		var unit := node as MobileUnit
+		if unit == null or not is_instance_valid(unit):
+			continue
+		if unit is CombatUnit and (unit as CombatUnit).current_hp <= 0:
 			continue
 		var screen_position := camera.unproject_position(unit.global_position)
 		if selection_rect.has_point(screen_position):
 			units.append(unit)
 	return units
 
-func _select_units(units: Array[CombatUnit]) -> void:
+func _select_units(units: Array[MobileUnit]) -> void:
 	for unit in selected_units:
 		if is_instance_valid(unit):
 			unit.set_selected(false)
 	selected_units.clear()
 	for unit in units:
-		if is_instance_valid(unit) and unit.team_id == 1 and unit.current_hp > 0:
+		if is_instance_valid(unit) and unit.team_id == 1 and _is_selectable_alive(unit):
 			selected_units.append(unit)
 			unit.set_selected(true)
 	hud.update_selection_summary(selected_units.size())
 	if selected_units.is_empty():
 		hud.set_hint("No soldiers selected.")
 	elif selected_units.size() == 1:
-		hud.set_hint("Rifleman selected. Tap ground to move or enemy to attack.")
+		var selected := selected_units[0]
+		if selected is WorkerUnit:
+			hud.set_hint("Worker selected. Tap ground to move.")
+		else:
+			hud.set_hint("Rifleman selected. Tap ground to move or enemy to attack.")
 	else:
-		hud.set_hint("%d riflemen selected." % selected_units.size())
+		hud.set_hint("%d units selected." % selected_units.size())
 
 func _move_selected_to(world_position: Vector3) -> void:
 	var offsets := _formation_offsets(selected_units.size())
@@ -195,10 +211,15 @@ func _move_selected_to(world_position: Vector3) -> void:
 	hud.set_hint("Move order issued.")
 
 func _attack_selected(target: CombatUnit) -> void:
+	var issued := 0
 	for unit in selected_units:
-		if is_instance_valid(unit) and unit.current_hp > 0:
-			unit.set_attack_target(target)
-	hud.set_hint("Attack order issued.")
+		if is_instance_valid(unit) and unit is CombatUnit and (unit as CombatUnit).current_hp > 0:
+			(unit as CombatUnit).set_attack_target(target)
+			issued += 1
+	if issued > 0:
+		hud.set_hint("Attack order issued.")
+	else:
+		hud.set_hint("Workers cannot attack.")
 
 func _formation_offsets(count: int) -> Array[Vector3]:
 	var offsets: Array[Vector3] = []
@@ -226,13 +247,18 @@ func _raycast_from_screen(screen_position: Vector2) -> Dictionary:
 	query.collide_with_bodies = true
 	return get_world_3d().direct_space_state.intersect_ray(query)
 
-func _unit_from_collider(collider: Object) -> CombatUnit:
+func _selectable_from_collider(collider: Object) -> MobileUnit:
 	var node := collider as Node
 	while node != null:
-		if node is CombatUnit:
-			return node as CombatUnit
+		if node is MobileUnit:
+			return node as MobileUnit
 		node = node.get_parent()
 	return null
+
+func _is_selectable_alive(unit: MobileUnit) -> bool:
+	if unit is CombatUnit:
+		return (unit as CombatUnit).current_hp > 0
+	return true
 
 func _is_ground_hit(hit: Dictionary) -> bool:
 	var collider := hit.get("collider") as Node
@@ -266,7 +292,15 @@ func _count_live_units(team_id: int) -> int:
 	return count
 
 func _update_hud() -> void:
-	hud.update_status(10000, _count_live_units(1), 40, int(_match_seconds))
+	hud.update_status(10000, _count_live_player_units(), 40, int(_match_seconds))
+
+func _count_live_player_units() -> int:
+	var count := 0
+	for node in get_tree().get_nodes_in_group("player_units"):
+		var unit := node as MobileUnit
+		if unit != null and is_instance_valid(unit) and _is_selectable_alive(unit):
+			count += 1
+	return count
 
 func _load_json(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
