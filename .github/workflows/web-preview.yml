@@ -37,6 +37,41 @@ jobs:
           godot --headless --path . --export-release "Web Preview" build/web/index.html
           touch build/web/.nojekyll
 
+      - name: Add PWA install support
+        run: |
+          cp web/pwa/* build/web/
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("build/web/index.html")
+          html = path.read_text(encoding="utf-8")
+
+          head_include = """  <link rel=\"manifest\" href=\"manifest.webmanifest\">
+          <meta name=\"theme-color\" content=\"#071018\">
+          <meta name=\"mobile-web-app-capable\" content=\"yes\">
+          <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">
+          <meta name=\"apple-mobile-web-app-title\" content=\"Mobile RTS\">
+          <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">
+          <link rel=\"apple-touch-icon\" href=\"pwa-icon-180.png\">
+          """
+
+          sw_script = """  <script>
+            if (\"serviceWorker\" in navigator) {
+              window.addEventListener(\"load\", () => {
+                navigator.serviceWorker.register(\"service-worker.js\", { scope: \"./\" });
+              });
+            }
+          </script>
+          """
+
+          if "manifest.webmanifest" not in html:
+              html = html.replace("</head>", head_include + "</head>")
+          if "serviceWorker.register" not in html:
+              html = html.replace("</body>", sw_script + "</body>")
+
+          path.write_text(html, encoding="utf-8")
+          PY
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 

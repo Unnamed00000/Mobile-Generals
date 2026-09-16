@@ -31,6 +31,19 @@ https://unnamed00000.github.io/Mobile-Generals/
 
 Open that URL on a phone after the `Web Preview` action finishes. On the first setup, GitHub may require Pages to be enabled with `Settings -> Pages -> Source -> GitHub Actions`.
 
+## Install As PWA
+
+The web preview is also packaged as an installable PWA.
+
+On Android Chrome:
+
+1. Open the preview URL.
+2. Open the browser menu.
+3. Tap `Install app` or `Add to Home screen`.
+4. Launch `Mobile RTS` from the phone home screen.
+
+The PWA uses landscape orientation, fullscreen display, a web app manifest, app icons, and a service worker.
+
 ## Current Controls
 
 ### Android / Touch
