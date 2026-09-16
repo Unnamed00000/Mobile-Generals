@@ -176,12 +176,16 @@ func _make_material(color: Color, alpha: float) -> StandardMaterial3D:
 
 func _height_for_building() -> float:
 	match building_id:
+		"hq":
+			return 3.2
 		"power_plant":
 			return 3.6
 		"resource_center":
 			return 2.8
 		"barracks":
 			return 2.3
+		"defense_post":
+			return 1.9
 		"war_factory":
 			return 3.1
 		"defense_turret":
@@ -191,12 +195,16 @@ func _height_for_building() -> float:
 
 func _color_for_building() -> Color:
 	match building_id:
+		"hq":
+			return Color(0.16, 0.35, 0.64)
 		"power_plant":
 			return Color(0.18, 0.42, 0.86)
 		"resource_center":
 			return Color(0.22, 0.56, 0.66)
 		"barracks":
 			return Color(0.24, 0.37, 0.64)
+		"defense_post":
+			return Color(0.42, 0.45, 0.44)
 		"war_factory":
 			return Color(0.30, 0.33, 0.37)
 		"defense_turret":
